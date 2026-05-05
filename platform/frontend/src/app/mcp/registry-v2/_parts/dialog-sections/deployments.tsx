@@ -10,9 +10,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DeploymentStatusDot } from "@/app/mcp/registry/_parts/deployment-status";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -61,7 +59,7 @@ function PodActionDialog({
 [2026-05-03 22:35:00] transport=streamable-http port=8080 path=/mcp
 [2026-05-03 22:35:01] connected to upstream
 [2026-05-03 22:35:01] ready
-[2026-05-03 22:36:14] tools/list called by alice@example.com (env=Studio 1)
+[2026-05-03 22:36:14] tools/list called by alice@example.com (preset=Studio 1)
 [2026-05-03 22:36:14] returning 5 tools`}</pre>
           )}
           {action === "shell" && (
@@ -98,8 +96,8 @@ spec:
 }
 
 function PodRow({ pod }: { pod: Pod }) {
-  const { environments, restartPod } = useSpikeStore();
-  const env = environments.find((e) => e.id === pod.environmentId);
+  const { presets, restartPod } = useSpikeStore();
+  const preset = presets.find((p) => p.id === pod.presetId);
   const podState = podStateMapping(pod.status);
   const [expanded, setExpanded] = useState(false);
   const [dialogAction, setDialogAction] = useState<
@@ -107,164 +105,142 @@ function PodRow({ pod }: { pod: Pod }) {
   >(null);
 
   return (
-    <>
-      <div
-        className={cn("border-b last:border-b-0", expanded && "bg-muted/20")}
+    <div>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/40"
+        onClick={() => setExpanded((v) => !v)}
       >
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/30"
-          onClick={() => setExpanded((v) => !v)}
-        >
-          <ChevronRight
-            className={cn(
-              "h-4 w-4 text-muted-foreground transition-transform",
-              expanded && "rotate-90",
-            )}
-          />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="truncate font-mono text-xs">{pod.name}</span>
-              {env && (
-                <Badge variant="secondary" className="text-[10px] shrink-0">
-                  {env.label}
-                </Badge>
-              )}
-              <Badge variant="outline" className="text-[10px] shrink-0">
-                {pod.tenancy === "multi" ? "multi-tenant" : "single-tenant"}
-              </Badge>
-            </div>
-            <div className="mt-0.5 text-[11px] text-muted-foreground">
-              owner: {pod.ownerLabel} · {pod.callerCount}{" "}
-              {pod.callerCount === 1 ? "caller" : "callers"}
-            </div>
-          </div>
-          <div className="flex items-center gap-1.5 text-xs">
-            <DeploymentStatusDot state={podState.state} />
-            <span className="text-muted-foreground">{podState.label}</span>
-          </div>
-        </button>
-        {expanded && (
-          <div className="space-y-3 border-t bg-card px-4 py-3">
-            <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs md:grid-cols-4">
-              <div>
-                <div className="text-muted-foreground">Tenancy</div>
-                <div className="mt-0.5">
-                  {pod.tenancy === "multi" ? "multi-tenant" : "single-tenant"}
-                </div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Started</div>
-                <div className="mt-0.5">{fmtDate(pod.startedAt)}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Restarts</div>
-                <div className="mt-0.5">{pod.restarts}</div>
-              </div>
-              <div>
-                <div className="text-muted-foreground">Callers</div>
-                <div className="mt-0.5">{pod.callerCount}</div>
-              </div>
-              <div className="col-span-2 md:col-span-4">
-                <div className="text-muted-foreground">Image</div>
-                <div className="mt-0.5 font-mono">{pod.image}</div>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2 pt-1">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDialogAction("logs")}
-              >
-                <ScrollText className="h-3.5 w-3.5" />
-                Logs
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDialogAction("shell")}
-              >
-                <TerminalIcon className="h-3.5 w-3.5" />
-                Shell
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDialogAction("inspector")}
-              >
-                <Search className="h-3.5 w-3.5" />
-                Inspector
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => restartPod(pod.id)}
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                Restart
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDialogAction("yaml")}
-              >
-                <FileText className="h-3.5 w-3.5" />
-                K8s YAML
-              </Button>
-            </div>
-          </div>
+        <ChevronRight
+          className={cn(
+            "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+            expanded && "rotate-90",
+          )}
+        />
+        <span className="truncate font-mono text-xs">{pod.name}</span>
+        {preset && (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {preset.label}
+          </span>
         )}
-      </div>
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {pod.tenancy === "multi" ? "multi-tenant" : "single-tenant"}
+        </span>
+        <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <DeploymentStatusDot state={podState.state} />
+          {podState.label}
+        </span>
+      </button>
+      {expanded && (
+        <div className="space-y-3 border-t bg-muted/20 px-3 py-3 pl-9">
+          <div className="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1 text-xs">
+            <span className="text-muted-foreground">started</span>
+            <span>{fmtDate(pod.startedAt)}</span>
+            <span className="text-muted-foreground">restarts</span>
+            <span>{pod.restarts}</span>
+            <span className="text-muted-foreground">callers</span>
+            <span>{pod.callerCount}</span>
+            <span className="text-muted-foreground">owner</span>
+            <span>{pod.ownerLabel}</span>
+            <span className="text-muted-foreground">image</span>
+            <span className="font-mono">{pod.image}</span>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setDialogAction("logs")}
+            >
+              <ScrollText className="h-3.5 w-3.5" />
+              Logs
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setDialogAction("shell")}
+            >
+              <TerminalIcon className="h-3.5 w-3.5" />
+              Shell
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setDialogAction("inspector")}
+            >
+              <Search className="h-3.5 w-3.5" />
+              Inspector
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => restartPod(pod.id)}
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Restart
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              onClick={() => setDialogAction("yaml")}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              K8s YAML
+            </Button>
+          </div>
+        </div>
+      )}
       <PodActionDialog
         pod={pod}
         action={dialogAction}
         open={dialogAction !== null}
         onOpenChange={(v) => !v && setDialogAction(null)}
       />
-    </>
+    </div>
   );
 }
 
 export function DeploymentsSection({ catalogId }: { catalogId: string }) {
-  const { environments, pods } = useSpikeStore();
+  const { presets, pods, term } = useSpikeStore();
   const cpods = pods.filter((p) => p.catalogId === catalogId);
-  const envs = environments.filter((e) => e.catalogId === catalogId);
-  const [envFilter, setEnvFilter] = useState("all");
+  const items = presets.filter((p) => p.catalogId === catalogId);
+  const [presetFilter, setPresetFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
   const filtered = useMemo(
     () =>
       cpods.filter(
         (p) =>
-          (envFilter === "all" || p.environmentId === envFilter) &&
+          (presetFilter === "all" || p.presetId === presetFilter) &&
           (statusFilter === "all" || p.status === statusFilter),
       ),
-    [cpods, envFilter, statusFilter],
+    [cpods, presetFilter, statusFilter],
   );
 
   return (
     <div className="space-y-4 px-4 py-4">
       <div className="flex items-center justify-between gap-4">
-        <p className="text-xs text-muted-foreground">
-          Per-pod runtime view. Logs, shell, inspector, restart all live here
-          per-pod.
-        </p>
+        <p className="text-xs text-muted-foreground">Per-pod runtime view.</p>
         <div className="flex items-center gap-2">
-          <Select value={envFilter} onValueChange={setEnvFilter}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Environment" />
+          <Select value={presetFilter} onValueChange={setPresetFilter}>
+            <SelectTrigger className="h-8 w-[160px] text-xs">
+              <SelectValue placeholder={term.Singular} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All environments</SelectItem>
-              {envs.map((e) => (
-                <SelectItem key={e.id} value={e.id}>
-                  {e.label}
+              <SelectItem value="all">All {term.plural}</SelectItem>
+              {items.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="h-8 w-[140px] text-xs">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -278,17 +254,17 @@ export function DeploymentsSection({ catalogId }: { catalogId: string }) {
         </div>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          {filtered.length === 0 ? (
-            <div className="p-4 text-xs text-muted-foreground">
-              No pods match the current filters.
-            </div>
-          ) : (
-            filtered.map((p) => <PodRow key={p.id} pod={p} />)
-          )}
-        </CardContent>
-      </Card>
+      {filtered.length === 0 ? (
+        <div className="rounded-md border px-4 py-6 text-center text-xs text-muted-foreground">
+          No pods match the current filters.
+        </div>
+      ) : (
+        <div className="divide-y divide-border rounded-md border">
+          {filtered.map((p) => (
+            <PodRow key={p.id} pod={p} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

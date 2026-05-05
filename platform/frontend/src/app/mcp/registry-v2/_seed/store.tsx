@@ -4,6 +4,7 @@ import {
   createContext,
   type ReactNode,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -11,31 +12,63 @@ import {
   currentUser,
   catalogItems as seedCatalogItems,
   credentials as seedCredentials,
-  environments as seedEnvironments,
   pods as seedPods,
+  presetNames as seedPresetNames,
+  presets as seedPresets,
   teams as seedTeams,
 } from "./data";
 import type {
   CatalogItem,
   Credential,
-  Environment,
   FieldDef,
   Mapping,
   Pod,
+  Preset,
   Team,
 } from "./types";
 
+export type TermDef = {
+  singular: string;
+  plural: string;
+  Singular: string;
+  Plural: string;
+};
+
+const TERM_STORAGE_KEY = "registry-v2-term";
+const DEFAULT_SINGULAR = "preset";
+
+function capitalize(s: string): string {
+  if (!s) return s;
+  return s[0].toUpperCase() + s.slice(1);
+}
+
+function buildTerm(rawSingular: string): TermDef {
+  const singular = rawSingular.trim() || DEFAULT_SINGULAR;
+  const plural = singular.endsWith("s") ? singular : `${singular}s`;
+  return {
+    singular,
+    plural,
+    Singular: capitalize(singular),
+    Plural: capitalize(plural),
+  };
+}
+
 type StoreValue = {
   catalogItems: CatalogItem[];
-  environments: Environment[];
+  presets: Preset[];
+  presetNames: string[];
   credentials: Credential[];
   pods: Pod[];
   teams: Team[];
   currentUser: typeof currentUser;
+  term: TermDef;
+  setTermSingular: (singular: string) => void;
   revokeCredential: (id: string) => void;
   installCredential: (input: Omit<Credential, "id" | "createdAt">) => void;
-  upsertEnvironment: (env: Environment) => void;
-  deleteEnvironment: (id: string) => void;
+  upsertPreset: (preset: Preset) => void;
+  deletePreset: (id: string) => void;
+  upgradePreset: (id: string) => void;
+  addPresetName: (name: string) => void;
   restartPod: (id: string) => void;
   addField: (catalogId: string, field: FieldDef) => void;
   addMapping: (catalogId: string, mapping: Mapping) => void;
@@ -46,20 +79,40 @@ const StoreContext = createContext<StoreValue | null>(null);
 export function SpikeStoreProvider({ children }: { children: ReactNode }) {
   const [catalogItems, setCatalogItems] =
     useState<CatalogItem[]>(seedCatalogItems);
-  const [environments, setEnvironments] =
-    useState<Environment[]>(seedEnvironments);
+  const [presets, setPresets] = useState<Preset[]>(seedPresets);
+  const [presetNames, setPresetNames] =
+    useState<string[]>(seedPresetNames);
   const [credentials, setCredentials] = useState<Credential[]>(seedCredentials);
   const [pods, setPods] = useState<Pod[]>(seedPods);
   const [teams] = useState<Team[]>(seedTeams);
+  const [termSingular, setTermSingularState] =
+    useState<string>(DEFAULT_SINGULAR);
+
+  // Hydrate term from localStorage after mount to avoid SSR mismatch.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(TERM_STORAGE_KEY);
+    if (stored) setTermSingularState(stored);
+  }, []);
+
+  const term = useMemo(() => buildTerm(termSingular), [termSingular]);
 
   const value = useMemo<StoreValue>(
     () => ({
       catalogItems,
-      environments,
+      presets,
+      presetNames,
       credentials,
       pods,
       teams,
       currentUser,
+      term,
+      setTermSingular: (singular) => {
+        setTermSingularState(singular);
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(TERM_STORAGE_KEY, singular);
+        }
+      },
       revokeCredential: (id) =>
         setCredentials((cs) => cs.filter((c) => c.id !== id)),
       installCredential: (input) =>
@@ -71,18 +124,28 @@ export function SpikeStoreProvider({ children }: { children: ReactNode }) {
             createdAt: new Date().toISOString(),
           },
         ]),
-      upsertEnvironment: (env) =>
-        setEnvironments((es) => {
-          const exists = es.some((e) => e.id === env.id);
+      upsertPreset: (preset) => {
+        setPresets((ps) => {
+          const exists = ps.some((p) => p.id === preset.id);
           return exists
-            ? es.map((e) => (e.id === env.id ? env : e))
-            : [...es, env];
-        }),
-      deleteEnvironment: (id) => {
-        setEnvironments((es) => es.filter((e) => e.id !== id));
-        setCredentials((cs) => cs.filter((c) => c.environmentId !== id));
-        setPods((ps) => ps.filter((p) => p.environmentId !== id));
+            ? ps.map((p) => (p.id === preset.id ? preset : p))
+            : [...ps, preset];
+        });
+        setPresetNames((ns) =>
+          ns.includes(preset.label) ? ns : [...ns, preset.label],
+        );
       },
+      addPresetName: (name) =>
+        setPresetNames((ns) => (ns.includes(name) ? ns : [...ns, name])),
+      deletePreset: (id) => {
+        setPresets((ps) => ps.filter((p) => p.id !== id));
+        setCredentials((cs) => cs.filter((c) => c.presetId !== id));
+        setPods((ps) => ps.filter((p) => p.presetId !== id));
+      },
+      upgradePreset: (id) =>
+        setPresets((ps) =>
+          ps.map((p) => (p.id === id ? { ...p, pinnedVersion: null } : p)),
+        ),
       restartPod: (id) =>
         setPods((ps) =>
           ps.map((p) =>
@@ -106,7 +169,7 @@ export function SpikeStoreProvider({ children }: { children: ReactNode }) {
           ),
         ),
     }),
-    [catalogItems, environments, credentials, pods, teams],
+    [catalogItems, presets, presetNames, credentials, pods, teams, term],
   );
 
   return (

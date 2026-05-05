@@ -391,7 +391,7 @@ export function ManageUsersContent({
             deploymentStatuses={deploymentStatuses}
             onOpenPodLogs={onOpenPodLogs}
             onAddPersonal={
-              onAddPersonalConnection && !myPersonalServer
+              onAddPersonalConnection
                 ? () => {
                     onClose();
                     onAddPersonalConnection();

@@ -1,8 +1,8 @@
 import type { DeploymentState } from "@/app/mcp/registry/_parts/deployment-status";
-import type { CatalogItem, Environment, Pod } from "../_seed/types";
+import type { CatalogItem, Pod, Preset } from "../_seed/types";
 
-export function envsForCatalog(envs: Environment[], catalogId: string) {
-  return envs.filter((e) => e.catalogId === catalogId);
+export function presetsForCatalog(presets: Preset[], catalogId: string) {
+  return presets.filter((p) => p.catalogId === catalogId);
 }
 
 export function podsForCatalog(pods: Pod[], catalogId: string) {
@@ -13,10 +13,13 @@ export function podsRunning(pods: Pod[]) {
   return pods.filter((p) => p.status === "up").length;
 }
 
-export function visibleEnvsForUser(envs: Environment[], userTeamIds: string[]) {
-  return envs.filter((e) => {
-    if (e.visibility.kind === "org") return true;
-    return userTeamIds.includes(e.visibility.teamId);
+export function visiblePresetsForUser(
+  presets: Preset[],
+  userTeamIds: string[],
+) {
+  return presets.filter((p) => {
+    if (p.visibility.kind === "org") return true;
+    return userTeamIds.includes(p.visibility.teamId);
   });
 }
 
@@ -51,7 +54,7 @@ export function podStateMapping(status: Pod["status"]): {
   }
 }
 
-export function envHealth(podStatuses: Pod["status"][]): DeploymentState {
+export function presetHealth(podStatuses: Pod["status"][]): DeploymentState {
   if (podStatuses.length === 0) return "pending";
   if (podStatuses.every((s) => s === "up")) return "running";
   if (podStatuses.some((s) => s === "down")) return "failed";

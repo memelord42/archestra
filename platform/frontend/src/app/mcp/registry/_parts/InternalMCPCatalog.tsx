@@ -48,6 +48,7 @@ import { authClient } from "@/lib/clients/auth/auth-client";
 import { useDialogs } from "@/lib/hooks/use-dialog";
 import { useMcpRegistryServer } from "@/lib/mcp/external-mcp-catalog.query";
 import {
+  fetchInternalMcpCatalogItem,
   useInternalMcpCatalog,
   useMcpCatalogLabelKeys,
   useMcpCatalogLabelValues,
@@ -80,6 +81,7 @@ import {
   NoAuthInstallDialog,
   type NoAuthInstallResult,
 } from "./no-auth-install-dialog";
+import { PresetPickerDialog } from "./preset-picker-dialog";
 import { ReinstallConfirmationDialog } from "./reinstall-confirmation-dialog";
 import {
   RemoteServerInstallDialog,
@@ -164,6 +166,14 @@ export function InternalMCPCatalog({
   );
   const [selectedCatalogItem, setSelectedCatalogItem] =
     useState<CatalogItem | null>(null);
+  // Preset picker: shown before any install dialog when a parent catalog has
+  // children (presets). After the user picks one, we fetch the full child and
+  // hand it to the original install handler.
+  const [presetPickerParent, setPresetPickerParent] =
+    useState<CatalogItem | null>(null);
+  const [presetPickerType, setPresetPickerType] = useState<
+    "local" | "remote" | null
+  >(null);
   const [catalogItemForReinstall, setCatalogItemForReinstall] =
     useState<CatalogItem | null>(null);
   const [noAuthCatalogItem, setNoAuthCatalogItem] =
@@ -404,8 +414,15 @@ export function InternalMCPCatalog({
     _teamMode: boolean,
     options?: {
       preserveInstallTarget?: boolean;
+      skipPresetCheck?: boolean;
     },
   ) => {
+    if (!options?.skipPresetCheck && (catalogItem.children?.length ?? 0) > 0) {
+      setPresetPickerParent(catalogItem);
+      setPresetPickerType("remote");
+      return;
+    }
+
     if (!options?.preserveInstallTarget) {
       setPreselectedTeamId(null);
       setInstallPersonalOnly(false);
@@ -430,8 +447,15 @@ export function InternalMCPCatalog({
     catalogItem: CatalogItem,
     options?: {
       preserveInstallTarget?: boolean;
+      skipPresetCheck?: boolean;
     },
   ) => {
+    if (!options?.skipPresetCheck && (catalogItem.children?.length ?? 0) > 0) {
+      setPresetPickerParent(catalogItem);
+      setPresetPickerType("local");
+      return;
+    }
+
     if (!options?.preserveInstallTarget) {
       setPreselectedTeamId(null);
       setInstallPersonalOnly(false);
@@ -1341,6 +1365,28 @@ export function InternalMCPCatalog({
               ).length || 0
             : 0
         }
+      />
+
+      <PresetPickerDialog
+        parent={presetPickerParent}
+        onClose={() => {
+          setPresetPickerParent(null);
+          setPresetPickerType(null);
+        }}
+        onPick={async (childId) => {
+          const child = await fetchInternalMcpCatalogItem(childId);
+          const type = presetPickerType;
+          setPresetPickerParent(null);
+          setPresetPickerType(null);
+          if (!child) return;
+          if (type === "local") {
+            await handleInstallLocalServer(child, { skipPresetCheck: true });
+          } else if (type === "remote") {
+            await handleInstallRemoteServer(child, false, {
+              skipPresetCheck: true,
+            });
+          }
+        }}
       />
 
       <RemoteServerInstallDialog

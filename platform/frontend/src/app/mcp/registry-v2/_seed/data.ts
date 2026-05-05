@@ -1,4 +1,4 @@
-import type { CatalogItem, Credential, Environment, Pod, Team } from "./types";
+import type { CatalogItem, Credential, Pod, Preset, Team } from "./types";
 
 export const teams: Team[] = [
   { id: "team-studio1", name: "studio1-team" },
@@ -21,6 +21,7 @@ export const catalogItems: CatalogItem[] = [
     httpPath: "/mcp",
     authType: "none",
     labels: ["demo:playtika"],
+    latestVersion: "v2",
     fields: [
       {
         key: "host",
@@ -41,7 +42,7 @@ export const catalogItems: CatalogItem[] = [
         kind: "env",
         type: "string",
         required: true,
-        description: "Database name (set per environment)",
+        description: "Database name (set per preset)",
       },
       {
         key: "dialect",
@@ -96,6 +97,7 @@ export const catalogItems: CatalogItem[] = [
     args: ["-y", "@upstash/context7-mcp"],
     authType: "token",
     labels: [],
+    latestVersion: "v3",
     fields: [
       {
         key: "context7_api_key",
@@ -126,6 +128,7 @@ export const catalogItems: CatalogItem[] = [
     httpPath: "/mcp",
     authType: "token",
     labels: ["external"],
+    latestVersion: "v4",
     fields: [
       {
         key: "api_base",
@@ -173,6 +176,7 @@ export const catalogItems: CatalogItem[] = [
     args: ["-y", "mcp-atlassian"],
     authType: "token",
     labels: ["external"],
+    latestVersion: "v2",
     fields: [
       {
         key: "jira_url",
@@ -186,7 +190,7 @@ export const catalogItems: CatalogItem[] = [
         kind: "env",
         type: "string",
         required: false,
-        description: "Comma-separated project keys this env may access",
+        description: "Comma-separated project keys this preset may access",
       },
       {
         key: "read_only",
@@ -238,9 +242,20 @@ export const catalogItems: CatalogItem[] = [
   },
 ];
 
-export const environments: Environment[] = [
+export const presetNames: string[] = [
+  "default",
+  "dev",
+  "staging",
+  "production",
+  "Studio 1",
+  "Studio 2",
+  "prod-readonly",
+  "prod-admin",
+];
+
+export const presets: Preset[] = [
   {
-    id: "env-vertica-studio1",
+    id: "preset-vertica-studio1",
     catalogId: "cat-vertica",
     label: "Studio 1",
     visibility: {
@@ -255,9 +270,10 @@ export const environments: Environment[] = [
     },
     isDefault: false,
     createdAt: "2026-04-12T10:00:00Z",
+    pinnedVersion: "v1",
   },
   {
-    id: "env-vertica-studio2",
+    id: "preset-vertica-studio2",
     catalogId: "cat-vertica",
     label: "Studio 2",
     visibility: {
@@ -272,18 +288,20 @@ export const environments: Environment[] = [
     },
     isDefault: false,
     createdAt: "2026-04-12T10:05:00Z",
+    pinnedVersion: "v2",
   },
   {
-    id: "env-context7-default",
+    id: "preset-context7-default",
     catalogId: "cat-context7",
     label: "default",
     visibility: { kind: "org" },
     fieldValues: {},
     isDefault: true,
     createdAt: "2026-03-01T08:00:00Z",
+    pinnedVersion: "v1",
   },
   {
-    id: "env-github-readonly",
+    id: "preset-github-readonly",
     catalogId: "cat-github",
     label: "prod-readonly",
     visibility: {
@@ -297,9 +315,10 @@ export const environments: Environment[] = [
     },
     isDefault: false,
     createdAt: "2026-04-20T12:00:00Z",
+    pinnedVersion: "v3",
   },
   {
-    id: "env-github-admin",
+    id: "preset-github-admin",
     catalogId: "cat-github",
     label: "prod-admin",
     visibility: { kind: "team", teamId: "team-sre", teamName: "sre" },
@@ -309,9 +328,10 @@ export const environments: Environment[] = [
     },
     isDefault: false,
     createdAt: "2026-04-20T12:05:00Z",
+    pinnedVersion: "v2",
   },
   {
-    id: "env-jira-dev",
+    id: "preset-jira-dev",
     catalogId: "cat-jira",
     label: "dev",
     visibility: { kind: "org" },
@@ -322,36 +342,35 @@ export const environments: Environment[] = [
     },
     isDefault: true,
     createdAt: "2026-04-22T09:00:00Z",
+    pinnedVersion: null,
   },
   {
-    id: "env-jira-staging",
+    id: "preset-jira-staging",
     catalogId: "cat-jira",
     label: "staging",
-    visibility: {
-      kind: "team",
-      teamId: "team-data-platform",
-      teamName: "data-platform",
-    },
+    visibility: { kind: "org" },
     fieldValues: {
       jira_url: "https://acme-staging.atlassian.net",
       projects_filter: "STG,DATA",
       read_only: false,
     },
-    isDefault: false,
+    isDefault: true,
     createdAt: "2026-04-22T09:05:00Z",
+    pinnedVersion: "v1",
   },
   {
-    id: "env-jira-production",
+    id: "preset-jira-production",
     catalogId: "cat-jira",
     label: "production",
-    visibility: { kind: "team", teamId: "team-sre", teamName: "sre" },
+    visibility: { kind: "org" },
     fieldValues: {
       jira_url: "https://acme.atlassian.net",
       projects_filter: "OPS,INC,SEC",
       read_only: true,
     },
-    isDefault: false,
+    isDefault: true,
     createdAt: "2026-04-22T09:10:00Z",
+    pinnedVersion: "v1",
   },
 ];
 
@@ -360,7 +379,7 @@ export const pods: Pod[] = [
     id: "pod-vertica-studio1-shared",
     name: "mcp-mt-2369-vertica",
     catalogId: "cat-vertica",
-    environmentId: "env-vertica-studio1",
+    presetId: "preset-vertica-studio1",
     ownerLabel: "shared",
     tenancy: "multi",
     status: "up",
@@ -373,7 +392,7 @@ export const pods: Pod[] = [
     id: "pod-vertica-studio2-shared",
     name: "mcp-mt-7a4c-vertica",
     catalogId: "cat-vertica",
-    environmentId: "env-vertica-studio2",
+    presetId: "preset-vertica-studio2",
     ownerLabel: "shared",
     tenancy: "multi",
     status: "up",
@@ -386,7 +405,7 @@ export const pods: Pod[] = [
     id: "pod-context7-admin",
     name: "mcp-context7-admin",
     catalogId: "cat-context7",
-    environmentId: "env-context7-default",
+    presetId: "preset-context7-default",
     ownerLabel: "admin@example.com",
     tenancy: "single",
     status: "up",
@@ -399,7 +418,7 @@ export const pods: Pod[] = [
     id: "pod-context7-alice",
     name: "mcp-context7-alice",
     catalogId: "cat-context7",
-    environmentId: "env-context7-default",
+    presetId: "preset-context7-default",
     ownerLabel: "alice@example.com",
     tenancy: "single",
     status: "up",
@@ -412,7 +431,7 @@ export const pods: Pod[] = [
     id: "pod-context7-bob",
     name: "mcp-context7-bob",
     catalogId: "cat-context7",
-    environmentId: "env-context7-default",
+    presetId: "preset-context7-default",
     ownerLabel: "bob@example.com",
     tenancy: "single",
     status: "restarting",
@@ -425,7 +444,7 @@ export const pods: Pod[] = [
     id: "pod-github-readonly",
     name: "mcp-mt-3f2a-github",
     catalogId: "cat-github",
-    environmentId: "env-github-readonly",
+    presetId: "preset-github-readonly",
     ownerLabel: "shared",
     tenancy: "multi",
     status: "up",
@@ -438,7 +457,7 @@ export const pods: Pod[] = [
     id: "pod-github-admin",
     name: "mcp-mt-9b1e-github",
     catalogId: "cat-github",
-    environmentId: "env-github-admin",
+    presetId: "preset-github-admin",
     ownerLabel: "shared",
     tenancy: "multi",
     status: "degraded",
@@ -451,7 +470,7 @@ export const pods: Pod[] = [
     id: "pod-jira-dev",
     name: "mcp-mt-1d2c-jira",
     catalogId: "cat-jira",
-    environmentId: "env-jira-dev",
+    presetId: "preset-jira-dev",
     ownerLabel: "shared",
     tenancy: "multi",
     status: "up",
@@ -464,7 +483,7 @@ export const pods: Pod[] = [
     id: "pod-jira-staging",
     name: "mcp-mt-5e8a-jira",
     catalogId: "cat-jira",
-    environmentId: "env-jira-staging",
+    presetId: "preset-jira-staging",
     ownerLabel: "shared",
     tenancy: "multi",
     status: "up",
@@ -477,7 +496,7 @@ export const pods: Pod[] = [
     id: "pod-jira-production",
     name: "mcp-mt-bf03-jira",
     catalogId: "cat-jira",
-    environmentId: "env-jira-production",
+    presetId: "preset-jira-production",
     ownerLabel: "shared",
     tenancy: "multi",
     status: "up",
@@ -491,7 +510,7 @@ export const pods: Pod[] = [
 export const credentials: Credential[] = [
   {
     id: "cred-1",
-    environmentId: "env-vertica-studio1",
+    presetId: "preset-vertica-studio1",
     ownerId: "u-admin",
     ownerEmail: "admin@example.com",
     scope: "personal",
@@ -501,7 +520,7 @@ export const credentials: Credential[] = [
   },
   {
     id: "cred-2",
-    environmentId: "env-vertica-studio1",
+    presetId: "preset-vertica-studio1",
     ownerId: "u-alice",
     ownerEmail: "alice@example.com",
     scope: "personal",
@@ -511,7 +530,7 @@ export const credentials: Credential[] = [
   },
   {
     id: "cred-3",
-    environmentId: "env-vertica-studio2",
+    presetId: "preset-vertica-studio2",
     ownerId: "u-bob",
     ownerEmail: "bob@example.com",
     scope: "personal",
@@ -521,7 +540,7 @@ export const credentials: Credential[] = [
   },
   {
     id: "cred-4",
-    environmentId: "env-context7-default",
+    presetId: "preset-context7-default",
     ownerId: "u-admin",
     ownerEmail: "admin@example.com",
     scope: "personal",
@@ -531,7 +550,7 @@ export const credentials: Credential[] = [
   },
   {
     id: "cred-5",
-    environmentId: "env-context7-default",
+    presetId: "preset-context7-default",
     ownerId: "u-alice",
     ownerEmail: "alice@example.com",
     scope: "personal",
@@ -541,7 +560,7 @@ export const credentials: Credential[] = [
   },
   {
     id: "cred-6",
-    environmentId: "env-context7-default",
+    presetId: "preset-context7-default",
     ownerId: "u-bob",
     ownerEmail: "bob@example.com",
     scope: "personal",
@@ -551,7 +570,7 @@ export const credentials: Credential[] = [
   },
   {
     id: "cred-7",
-    environmentId: "env-github-readonly",
+    presetId: "preset-github-readonly",
     ownerId: "u-team-data",
     ownerEmail: "data-platform (team)",
     scope: "team",
@@ -561,7 +580,7 @@ export const credentials: Credential[] = [
   },
   {
     id: "cred-8",
-    environmentId: "env-github-admin",
+    presetId: "preset-github-admin",
     ownerId: "u-team-sre",
     ownerEmail: "sre (team)",
     scope: "team",
@@ -571,7 +590,7 @@ export const credentials: Credential[] = [
   },
   {
     id: "cred-9",
-    environmentId: "env-jira-dev",
+    presetId: "preset-jira-dev",
     ownerId: "u-admin",
     ownerEmail: "admin@example.com",
     scope: "personal",
@@ -581,7 +600,7 @@ export const credentials: Credential[] = [
   },
   {
     id: "cred-10",
-    environmentId: "env-jira-dev",
+    presetId: "preset-jira-dev",
     ownerId: "u-alice",
     ownerEmail: "alice@example.com",
     scope: "personal",
@@ -591,7 +610,7 @@ export const credentials: Credential[] = [
   },
   {
     id: "cred-11",
-    environmentId: "env-jira-staging",
+    presetId: "preset-jira-staging",
     ownerId: "u-team-data",
     ownerEmail: "data-platform (team)",
     scope: "team",
@@ -601,7 +620,7 @@ export const credentials: Credential[] = [
   },
   {
     id: "cred-12",
-    environmentId: "env-jira-production",
+    presetId: "preset-jira-production",
     ownerId: "u-team-sre",
     ownerEmail: "sre (team)",
     scope: "team",

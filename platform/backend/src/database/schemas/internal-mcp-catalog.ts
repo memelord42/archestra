@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   boolean,
   index,
   jsonb,
@@ -78,6 +79,16 @@ const internalMcpCatalogTable = pgTable(
       onDelete: "set null",
     }),
     scope: mcpCatalogScopeEnum("scope").notNull().default("org"),
+    /**
+     * When set, this row is a hidden preset of the referenced parent catalog
+     * item. Children inherit the parent's config and bake in preset values for
+     * prompt-on-install fields. Children are filtered from catalog grids and
+     * are only reached via the parent's install dialog.
+     */
+    parentCatalogId: uuid("parent_catalog_id").references(
+      (): AnyPgColumn => internalMcpCatalogTable.id,
+      { onDelete: "cascade" },
+    ),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" })
       .notNull()
@@ -90,6 +101,9 @@ const internalMcpCatalogTable = pgTable(
     ),
     authorIdIdx: index("internal_mcp_catalog_author_id_idx").on(table.authorId),
     scopeIdx: index("internal_mcp_catalog_scope_idx").on(table.scope),
+    parentCatalogIdIdx: index(
+      "internal_mcp_catalog_parent_catalog_id_idx",
+    ).on(table.parentCatalogId),
   }),
 );
 

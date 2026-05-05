@@ -1,4 +1,4 @@
-// Spike-only types. Mirrors the proposed catalog/environment/install model
+// Spike-only types. Mirrors the proposed catalog/preset/install model
 // without touching the real schema. Everything here is mock data.
 
 export type FieldKind = "env" | "user";
@@ -14,7 +14,7 @@ export type FieldDef = {
   // For user fields only:
   source?: UserFieldSource;
   // For env fields only: when set, the field is fixed at the catalog level
-  // and not prompted per-environment.
+  // and not prompted per-preset.
   staticValue?: string;
 };
 
@@ -47,27 +47,30 @@ export type CatalogItem = {
   mappings: Mapping[];
   authType: "none" | "token" | "oauth" | "jwt" | "idp-exchange";
   labels: string[];
+  latestVersion: string;
 };
 
-export type EnvironmentVisibility =
+export type PresetVisibility =
   | { kind: "org" }
   | { kind: "team"; teamId: string; teamName: string };
 
-export type Environment = {
+export type Preset = {
   id: string;
   catalogId: string;
   label: string;
-  visibility: EnvironmentVisibility;
+  visibility: PresetVisibility;
   fieldValues: Record<string, string | number | boolean>;
   isDefault: boolean;
   createdAt: string;
+  /** When null, the preset tracks the catalog's latest version automatically. */
+  pinnedVersion: string | null;
 };
 
 export type Scope = "personal" | "team" | "org";
 
 export type Credential = {
   id: string;
-  environmentId: string;
+  presetId: string;
   ownerId: string;
   ownerEmail: string;
   scope: Scope;
@@ -84,11 +87,11 @@ export type Pod = {
   id: string;
   name: string;
   catalogId: string;
-  // null for multitenant pods that span environments? No — even multitenant
+  // null for multitenant pods that span presets? No — even multitenant
   // pods belong to one catalog, but in our model the multitenant pod still
-  // maps 1:1 to one environment because env field values bake into headers
-  // assembled per call. For single-tenant the pod is per (env, scope-target).
-  environmentId: string;
+  // maps 1:1 to one preset because env field values bake into headers
+  // assembled per call. For single-tenant the pod is per (preset, scope-target).
+  presetId: string;
   ownerLabel: string; // "shared" for multitenant, owner email for personal, team name for team
   tenancy: Tenancy;
   status: PodStatus;

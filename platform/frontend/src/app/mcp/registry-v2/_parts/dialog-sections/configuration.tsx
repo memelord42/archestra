@@ -24,6 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { useSpikeStore } from "../../_seed/store";
 import type { CatalogItem, FieldDef } from "../../_seed/types";
 import {
   AddEnvFieldDialog,
@@ -31,7 +32,13 @@ import {
   AddUserFieldDialog,
 } from "../field-and-mapping-dialogs";
 
-function FieldsTable({ fields }: { fields: FieldDef[] }) {
+function FieldsTable({
+  fields,
+  perPresetLabel,
+}: {
+  fields: FieldDef[];
+  perPresetLabel: string;
+}) {
   return (
     <Table>
       <TableHeader>
@@ -66,7 +73,7 @@ function FieldsTable({ fields }: { fields: FieldDef[] }) {
                   </span>
                 </span>
               ) : (
-                "per-environment"
+                perPresetLabel
               )}
             </TableCell>
             <TableCell className="text-xs text-muted-foreground">
@@ -102,11 +109,13 @@ function SectionHeader({
 }
 
 export function ConfigurationSection({ cat }: { cat: CatalogItem }) {
+  const { term } = useSpikeStore();
   const envFields = cat.fields.filter((f) => f.kind === "env");
   const userFields = cat.fields.filter((f) => f.kind === "user");
   const [envFieldOpen, setEnvFieldOpen] = useState(false);
   const [userFieldOpen, setUserFieldOpen] = useState(false);
   const [mappingOpen, setMappingOpen] = useState(false);
+  const perPresetLabel = `per-${term.singular}`;
 
   return (
     <div className="space-y-8 px-4 py-4">
@@ -129,7 +138,7 @@ export function ConfigurationSection({ cat }: { cat: CatalogItem }) {
               <div className="space-y-0.5">
                 <div className="text-sm font-medium">Single-tenant</div>
                 <div className="text-xs text-muted-foreground">
-                  One pod per (environment, scope-target).
+                  One pod per ({term.singular}, scope-target).
                 </div>
               </div>
             </Label>
@@ -224,7 +233,7 @@ export function ConfigurationSection({ cat }: { cat: CatalogItem }) {
       <section className="space-y-4">
         <SectionHeader
           title="Fields"
-          description="Environment fields are admin-set per environment. User fields are supplied by the caller."
+          description={`Env fields are admin-set per ${term.singular}. User fields are supplied by the caller.`}
           action={
             <div className="flex gap-2">
               <Button
@@ -249,9 +258,9 @@ export function ConfigurationSection({ cat }: { cat: CatalogItem }) {
         {envFields.length > 0 && (
           <div className="space-y-2">
             <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Environment fields
+              Env fields
             </div>
-            <FieldsTable fields={envFields} />
+            <FieldsTable fields={envFields} perPresetLabel={perPresetLabel} />
           </div>
         )}
         {userFields.length > 0 && (
@@ -259,7 +268,10 @@ export function ConfigurationSection({ cat }: { cat: CatalogItem }) {
             <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
               User fields
             </div>
-            <FieldsTable fields={userFields} />
+            <FieldsTable
+              fields={userFields}
+              perPresetLabel={perPresetLabel}
+            />
           </div>
         )}
       </section>
@@ -277,7 +289,7 @@ export function ConfigurationSection({ cat }: { cat: CatalogItem }) {
               onClick={() => setMappingOpen(true)}
             >
               <Plus className="h-3.5 w-3.5" />
-              Mapping
+              env var / header / secret file
             </Button>
           }
         />

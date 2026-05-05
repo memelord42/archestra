@@ -121,6 +121,17 @@ export const SelectInternalMcpCatalogSchema = createSelectSchema(
   labels: z.array(CatalogLabelSchema).default([]),
   // Teams are loaded from the junction table, not from the DB row
   teams: z.array(z.object({ id: z.string(), name: z.string() })).default([]),
+  // Hidden child rows materialized from `presets` jsonb. Loaded by the model
+  // for parents only — children themselves carry an empty array.
+  children: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        description: z.string().nullable().optional(),
+      }),
+    )
+    .default([]),
   authorName: z.string().nullable().optional(),
 });
 

@@ -1,0 +1,1026 @@
+ ▐▛███▜▌   Claude Code v2.1.128
+▝▜█████▛▘  Opus 4.7 · Claude Max
+  ▘▘ ▝▝    ~/code/archestra/platform
+
+❯ I want to add concept of presets. Some of the configs with                    
+  PromptOnEachInstallations should be able to group into presets, which I can   
+  select of frontend when installing the server                                 
+
+⏺ I'll explore the registry code first to understand how
+  PromptOnEachInstallation configs work today, then we can discuss the design.
+
+⏺ Bash(git log --oneline -5 registry-spike)
+  ⎿  0f5d83b18 feat: add new registry prototype
+     276ef3913 fix: disable server renaming (#4329)
+     1bfefd5a6 ci(contrib): add avasis-ai (#4321)
+     … +2 lines (ctrl+o to expand)
+
+⏺ Bash(git show --stat 0f5d83b18 | head -80)
+  ⎿  commit 0f5d83b182b574680be4f5ed6f4359e0bc8bf83a
+     Author: Ildar Iskhakov <ildar6v@gmail.com>
+     Date:   Mon May 4 11:35:19 2026 +0100
+     … +17 lines (ctrl+o to expand)
+
+  Searched for 3 patterns, read 3 files (ctrl+o to expand)
+
+⏺ Looking at the spike, "prompt-on-install" fields today are FieldDef with kind:
+   "user" + source: "prompt-install" (Jira username+api_token, Vertica
+  username+password, Context7 context7_api_key). The install dialog renders one
+  input per field.
+
+  A clean way to add presets is to mirror what Environment already does for env
+  fields — make a Preset record that stores values for some/all of a catalog's
+  prompt-install fields, scoped (personal/team/org) and shown in the Install
+  dialog as a dropdown that pre-fills the inputs (still editable). Tradeoff:
+  presets containing secrets need the same secret-storage path as credentials,
+  and you double the "what do I pick?" UX in the dialog (Environment + Preset
+  selectors side by side).
+
+  Two design questions before I touch code:
+  1. Scope — personal-only (shortcut for me), team/org-shared (shared service
+  accounts), or both?
+  2. All vs subset — does a preset have to fill every prompt-install field, or
+  can it cover a subset and leave the rest to be typed (e.g. preset fills
+  api_token, user types own username)?
+
+✻ Cooked for 1m 15s
+
+❯ I want to make it as simple as possible. In this case you can create an entry 
+   in the new internal_mcp_catalog field "Presets" (jsonb), When I install mcp  
+  server I can select preset from dropdown and these fields will be pre-filled  
+  to preset                                                                     
+
+  Searched for 6 patterns, read 2 files, listed 3 directories (ctrl+o to expand)
+
+⏺ Found the real model. The internal_mcp_catalog table has two places that use
+  promptOnInstallation: true — userConfig (Record<string, UserConfigField>) and
+  localConfig.environment[] entries. Both would be candidates for preset
+  coverage.
+
+  Minimal shape I'd propose:
+
+  presets: jsonb // Array<{ name: string; values: Record<string, string | number
+   | boolean> }>
+
+  Keys in values match either a userConfig key or a
+  localConfig.environment[].key. The install dialog gets a "Preset" dropdown;
+  selecting one pre-fills matching inputs (still editable).
+
+  Two things to confirm before I cut code:
+
+  1. Where do admins author presets — add a section to the existing catalog edit
+   UI (where userConfig/localConfig are already edited), or skip the UI for now
+  and edit via JSON / seed only?
+  2. Which install dialog — the real one (frontend/src/app/mcp/registry/...
+  install flow tied to userConfig + localConfig.environment), or the registry-v2
+   spike dialog you've been iterating on? The schema change is the same either
+  way; just want to know which UI to wire first.
+
+✻ Churned for 1m 6s
+
+❯ we will add the UI later                                                      
+
+⏺ I'll add the presets jsonb column to the schema and types. Let me check the
+  model layer first to make sure nothing else needs touching.
+
+  Searched for 3 patterns, read 1 file, listed 1 directory (ctrl+o to expand)
+
+⏺ Model passes through ...dbValues, so no model changes needed. Now adding the
+  column + types.
+
+⏺ Update(backend/src/types/mcp-catalog.ts)
+  ⎿  Added 9 lines
+      50    valuePrefix: z.string().optional(),
+      51  });
+      52  
+      53 +export const CatalogPresetSchema = z.object({                  
+      54 +  name: z.string().min(1),                                     
+      55 +  description: z.string().optional(),                          
+      56 +  values: z.record(                                            
+      57 +    z.string(),                                                
+      58 +    z.union([z.string(), z.number(), z.boolean(), z.array(z.str
+         +ing())]),                                                      
+      59 +  ),                                                           
+      60 +});                                                            
+      61 +                                                               
+      62  // Define a version of LocalConfigSchema for SELECT operations
+      63  // where required and description fields are optional (database
+           may not have them)
+      64  // Note: We can't use .extend() on LocalConfigSchema because it
+           has .refine()
+
+⏺ Update(backend/src/types/mcp-catalog.ts)
+  ⎿  Added 1 line
+      113    serverType: InternalMcpCatalogServerTypeSchema,
+      114    authFields: z.array(AuthFieldSchema).nullable(),
+      115    userConfig: z.record(z.string(), UserConfigFieldSchema).null
+           able(),
+      116 +  presets: z.array(CatalogPresetSchema).nullable(),           
+      117    oauthConfig: OAuthConfigSchema.nullable(),
+      118    enterpriseManagedConfig: EnterpriseManagedCredentialConfigSc
+           hema.nullable(),
+      119    localConfig: LocalConfigSelectSchema.nullable(),
+
+⏺ Update(backend/src/types/mcp-catalog.ts)
+  ⎿  Added 1 line
+      137        .record(z.string(), UserConfigFieldSchema)
+      138        .nullable()
+      139        .optional(),
+      140 +    presets: z.array(CatalogPresetSchema).nullable().optional(
+          +),                                                            
+      141      oauthConfig: OAuthConfigSchema.nullable().optional(),
+      142      enterpriseManagedConfig:
+      143        EnterpriseManagedCredentialConfigSchema.nullable().optio
+           nal(),
+
+⏺ Update(backend/src/types/mcp-catalog.ts)
+  ⎿  Added 1 line
+      168        .record(z.string(), UserConfigFieldSchema)
+      169        .nullable()
+      170        .optional(),
+      171 +    presets: z.array(CatalogPresetSchema).nullable().optional(
+          +),                                                            
+      172      oauthConfig: OAuthConfigSchema.nullable().optional(),
+      173      enterpriseManagedConfig:
+      174        EnterpriseManagedCredentialConfigSchema.nullable().optio
+           nal(),
+
+⏺ Now adding the type export:
+
+⏺ Update(backend/src/types/mcp-catalog.ts)
+  ⎿  Added 1 line
+      203  export type AuthField = z.infer<typeof AuthFieldSchema>;
+      204  export type UserConfigField = z.infer<typeof UserConfigFieldSc
+           hema>;
+      205  export type UserConfig = Record<string, UserConfigField>;
+      206 +export type CatalogPreset = z.infer<typeof CatalogPresetSchema
+          +>;                                                            
+      207  export type OAuthConfig = z.infer<typeof OAuthConfigSchema>;
+      208  
+      209  // Export LocalConfig type for reuse in database schema
+
+⏺ Now the Drizzle schema column:
+
+⏺ Update(backend/src/database/schemas/internal-mcp-catalog.ts)  ⎿  Added 1 line
+      10  } from "drizzle-orm/pg-core";
+      11  import type {
+      12    AuthField,
+      13 +  CatalogPreset,                                               
+      14    EnterpriseManagedCredentialConfig,
+      15    InternalMcpCatalogServerType,
+      16    LocalConfig,
+
+⏺ Update(backend/src/database/schemas/internal-mcp-catalog.ts)
+  ⎿  Added 1 line
+      65      // Custom Kubernetes deployment spec YAML (if null, generat
+          ed from localConfig)
+      66      deploymentSpecYaml: text("deployment_spec_yaml"),
+      67      userConfig: jsonb("user_config").$type<UserConfig>().defaul
+          t({}),
+      68 +    presets: jsonb("presets").$type<Array<CatalogPreset>>().def
+         +ault([]),                                                      
+      69      // OAuth configuration for remote servers
+      70      oauthConfig: jsonb("oauth_config").$type<OAuthConfig>(),
+      71      enterpriseManagedConfig: jsonb(
+
+⏺ Now let me confirm CatalogPreset is exported from @/types index, then generate
+   the migration.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Re-exported via export *. Generating the migration now.
+
+⏺ Bash(pnpm db:generate 2>&1 | tail -30)
+  ⎿  @backend:db:generate: organization_role 8 columns 0 indexes 1 fks
+     @backend:db:generate: organization 43 columns 0 indexes 0 fks
+     @backend:db:generate: processed_email 3 columns 1 indexes 0 fks
+     … +21 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Migration looks right. Verifying type-check passes for the touched files.
+
+⏺ Bash(cd /Users/ildar/code/archestra/platform/backend && pnpm exec tsc --noEmit
+       2>&1 | grep -i "preset\|mcp-catalog\|internal-mcp-catalog" | head -20)
+  ⎿  (No output)
+
+⏺ Bash(pnpm exec drizzle-kit check 2>&1 | tail -10)
+  ⎿  No config path provided, using default 'drizzle.config.ts'
+     Reading config file '/Users/ildar/code/archestra/platform/backend/driz
+     zle.config.ts'
+     Everything's fine 🐶🔥
+
+⏺ Done. Changes:
+
+  - backend/src/types/mcp-catalog.ts:38 — added CatalogPresetSchema ({ name, 
+  description?, values: Record<string, string|number|boolean|string[]> }) plus
+  CatalogPreset type, wired into Select/Insert/Update schemas
+  - backend/src/database/schemas/internal-mcp-catalog.ts:67 — added presets 
+  jsonb default '[]' column
+  - backend/src/database/migrations/0229_rare_mesmero.sql — generated migration
+
+  Preset values keys are free-form strings — they can match a userConfig key or
+  a localConfig.environment[].key, so the future install UI can pre-fill
+  prompted fields from either source. Model layer already spreads ...dbValues,
+  so no model changes were needed.
+
+✻ Baked for 2m 7s
+
+❯ [Image #1] now can you add the UI like on this page real registry. Don't      
+  touch spike, it is only for the reference.[Image #2] and prefill them like    
+  here. But call it Presets not Environments                                    
+  ⎿  [Image #1]
+  ⎿  [Image #2]
+
+⏺ Exploring the real registry UI now.
+
+  Searched for 2 patterns, read 2 files, listed 1 directory (ctrl+o to expand)
+
+⏺ This is sizeable. Let me delegate exploration before changing anything.
+
+⏺ Explore(Map real registry UI surfaces for presets)
+  ⎿  Done (29 tool uses · 77.3k tokens · 1m 8s)
+  (ctrl+o to expand)
+
+⏺ Let me verify the key insertion points before editing.
+
+  Searched for 10 patterns, read 5 files (ctrl+o to expand)
+
+⏺ Bash(cd /Users/ildar/code/archestra/platform && grep -rn "\"codegen"
+      package.json frontend/package.json backend/package.json 2>/dev/null | head
+       -10)
+  ⎿  package.json:26:    "codegen": "CODEGEN=true turbo codegen && python3
+     dev/grafana/generate-pg-dashboard-variants.py",
+     backend/package.json:29:    "codegen:access-control-docs": "tsx --tsco
+     … +9 lines (ctrl+o to expand)
+
+  Searched for 4 patterns, listed 1 directory (ctrl+o to expand)
+⏺ Bash(pnpm codegen 2>&1 | tail -20)
+  ⎿  @backend:codegen:     at async file:///Users/ildar/code/archestra/plat
+     form/node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/cli.mjs:55:45
+     9 {
+     … +17 lines (ctrl+o to expand)
+
+⏺ Sandbox is blocking /tmp writes for tsx. Retrying with sandbox disabled —
+  codegen needs to write to system tmp.
+
+⏺ Bash(pnpm codegen 2>&1 | tail -20)
+  ⎿  @shared:codegen:
+     @shared:codegen: [Job 1] ⏳ Generating from 1 input:
+     @shared:codegen: [Job 1]   [1] https://archestra.ai/mcp-catalog/api/do
+     … +15 lines (ctrl+o to expand)
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Now let me look at how the form's useFieldArray is set up so the new presets
+  section follows the same pattern.
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Adding presets to the form schema:
+
+⏺ Update(frontend/src/app/mcp/registry/_parts/mcp-catalog-form.types.ts)
+  ⎿  Added 18 lines
+      218      labels: z
+      219        .array(z.object({ key: z.string(), value: z.string() }))
+      220        .optional(),
+      221 +    // Presets: named bundles of pre-filled values for prompt-
+          +on-install fields                                             
+      222 +    presets: z                                                
+      223 +      .array(                                                 
+      224 +        z.object({                                            
+      225 +          name: z.string().trim().min(1, "Preset name is requi
+          +red"),                                                        
+      226 +          description: z.string().optional().or(z.literal(""))
+          +,                                                             
+      227 +          values: z.record(                                   
+      228 +            z.string(),                                       
+      229 +            z.union([                                         
+      230 +              z.string(),                                     
+      231 +              z.number(),                                     
+      232 +              z.boolean(),                                    
+      233 +              z.array(z.string()),                            
+      234 +            ]),                                               
+      235 +          ),                                                  
+      236 +        }),                                                   
+      237 +      )                                                       
+      238 +      .optional(),                                            
+      239      // Scope for catalog item visibility
+      240      scope: z.enum(["personal", "team", "org"]).optional(),
+      241      // Team IDs for team-scoped items
+
+⏺ Now the transform helpers:
+
+⏺ Update(frontend/src/app/mcp/registry/_parts/mcp-catalog-form.utils.ts)
+  ⎿  Added 11 lines
+      228      data.labels = [];
+      229    }
+      230  
+      231 +  // Handle presets                                           
+      232 +  if (values.presets && values.presets.length > 0) {          
+      233 +    data.presets = values.presets.map((p) => ({               
+      234 +      name: p.name.trim(),                                    
+      235 +      ...(p.description ? { description: p.description } : {})
+          +,                                                             
+      236 +      values: p.values,                                       
+      237 +    }));                                                      
+      238 +  } else {                                                    
+      239 +    data.presets = [];                                        
+      240 +  }                                                           
+      241 +                                                              
+      242    // Handle scope
+      243    if (values.scope) {
+      244      data.scope = values.scope;
+
+⏺ Update(frontend/src/app/mcp/registry/_parts/mcp-catalog-form.utils.ts)
+  ⎿  Added 7 lines
+      484      oauthClientSecretVaultKey,
+      485      // Labels
+      486      labels: item.labels ?? [],
+      487 +    // Presets                                                
+      488 +    presets:                                                  
+      489 +      item.presets?.map((p) => ({                             
+      490 +        name: p.name,                                         
+      491 +        description: p.description ?? "",                     
+      492 +        values: p.values ?? {},                               
+      493 +      })) ?? [],                                              
+      494      // Scope
+      495      scope: (item.scope as AgentScope) ?? "org",
+      496      // Teams
+
+⏺ Update(frontend/src/app/mcp/registry/_parts/mcp-catalog-form.utils.ts)
+  ⎿  Added 1 line
+      775      },
+      776      scope: "personal",
+      777      teams: [],
+      778 +    presets: [],                                              
+      779    } as McpCatalogFormValues;
+      780  }
+      781  
+
+  Searched for 3 patterns, read 2 files (ctrl+o to expand)
+
+⏺ Update(frontend/src/app/mcp/registry/_parts/mcp-catalog-form.tsx)
+  ⎿  Added 1 line
+      237            },
+      238            scope: "personal",
+      239            teams: [],
+      240 +          presets: [],                                        
+      241          }),
+      242    });
+      243  
+  Searched for 3 patterns (ctrl+o to expand)
+
+⏺ Building the Presets section component:
+
+⏺ Write(frontend/src/app/mcp/registry/_parts/presets-section.tsx)
+  ⎿  Wrote 230 lines to
+     frontend/src/app/mcp/registry/_parts/presets-section.tsx
+       2 import { type Control, useFieldArray, type UseFormReturn } from 
+         "react-hook-form";
+       3 import { Button } from "@/components/ui/button";
+       4 import {
+       5   FormControl,
+       6   FormField,
+       7   FormItem,
+       8   FormLabel,
+       9   FormMessage,
+      10 } from "@/components/ui/form";
+     … +235 lines (ctrl+o to expand)
+
+⏺ Now wiring it into the form. Inserting after FieldsAndMappingsSection, before
+  Labels:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(frontend/src/app/mcp/registry/_parts/mcp-catalog-form.tsx)
+  ⎿  Added 1 line
+       94    type McpCatalogFormValues,
+       95  } from "./mcp-catalog-form.types";
+       96  import { transformCatalogItemToFormValues } from "./mcp-catalo
+           g-form.utils";
+       97 +import { PresetsSection } from "./presets-section";           
+       98  
+       99  const { useIdentityProviders } = config.enterpriseFeatures.cor
+           e
+      100    ? // biome-ignore lint/style/noRestrictedImports: conditiona
+           l EE query import for IdP selector
+
+⏺ Update(frontend/src/app/mcp/registry/_parts/mcp-catalog-form.tsx)
+  ⎿  Added 3 lines
+      2111              />
+      2112  
+      2113              <Separator />
+      2114 +            <PresetsSection control={form.control} form={form
+           +} />                                                         
+      2115 +                                                             
+      2116 +            <Separator />                                    
+      2117              <div className={embedded ? "mb-4" : ""}>
+      2118                <div className="space-y-1">
+      2119                  <div className="flex items-center gap-2">
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Now I'll add the preset selector. First, define the helper inside the local
+  install dialog component (so it can read catalogItem, setEnvironmentValues,
+  setUserConfigValues, vaultSecrets, etc.):
+
+⏺ Update(frontend/src/app/mcp/registry/_parts/local-server-install-dialog.tsx)
+  ⎿  Added 28 lines
+      264      setUserConfigValues((prev) => ({ ...prev, [key]: value }))
+           ;
+      265    };
+      266  
+      267 +  const presets = catalogItem?.presets ?? [];                 
+      268 +  const promptedEnvVarKeys = new Set(promptedEnvVars.map((e) =
+          +> e.key));                                                    
+      269 +  const promptedUserConfigKeys = new Set(Object.keys(promptabl
+          +eUserConfig));                                                
+      270 +  const presetCanFillSomething =                              
+      271 +    presets.length > 0 &&                                     
+      272 +    (promptedEnvVarKeys.size > 0 || promptedUserConfigKeys.siz
+          +e > 0);                                                       
+      273 +                                                              
+      274 +  const applyPreset = (presetName: string) => {               
+      275 +    const preset = presets.find((p) => p.name === presetName);
+      276 +    if (!preset) return;                                      
+      277 +    const envPatch: Record<string, string> = {};              
+      278 +    const userPatch: Record<string, string> = {};             
+      279 +    for (const [key, value] of Object.entries(preset.values ??
+          + {})) {                                                       
+      280 +      const stringified = presetValueToString(value);         
+      281 +      if (promptedEnvVarKeys.has(key)) {                      
+      282 +        envPatch[key] = stringified;                          
+      283 +      } else if (promptedUserConfigKeys.has(key)) {           
+      284 +        userPatch[key] = stringified;                         
+      285 +      }                                                       
+      286 +    }                                                         
+      287 +    if (Object.keys(envPatch).length > 0) {                   
+      288 +      setEnvironmentValues((prev) => ({ ...prev, ...envPatch }
+          +));                                                           
+      289 +    }                                                         
+      290 +    if (Object.keys(userPatch).length > 0) {                  
+      291 +      setUserConfigValues((prev) => ({ ...prev, ...userPatch }
+          +));                                                           
+      292 +    }                                                         
+      293 +  };                                                          
+      294 +                                                              
+      295    const handleInstall = async () => {
+      296      if (!catalogItem) return;
+      297  
+
+⏺ Now add the preset dropdown above the env-var/user-config block:
+
+⏺ Update(frontend/src/app/mcp/registry/_parts/local-server-install-dialog.tsx)
+  ⎿  Added 27 lines
+      587          />
+      588        )}
+      589  
+      590 +      {canInstall && presetCanFillSomething && (              
+      591 +        <div className="space-y-2">                           
+      592 +          <Label>Preset</Label>                               
+      593 +          <Select onValueChange={applyPreset}>                
+      594 +            <SelectTrigger>                                   
+      595 +              <SelectValue placeholder="-- Select a preset to 
+          +pre-fill fields --" />                                        
+      596 +            </SelectTrigger>                                  
+      597 +            <SelectContent>                                   
+      598 +              {presets.map((preset) => (                      
+      599 +                <SelectItem key={preset.name} value={preset.na
+          +me}>                                                          
+      600 +                  {preset.name}                               
+      601 +                  {preset.description ? (                     
+      602 +                    <span className="ml-2 text-xs text-muted-f
+          +oreground">                                                   
+      603 +                      {preset.description}                    
+      604 +                    </span>                                   
+      605 +                  ) : null}                                   
+      606 +                </SelectItem>                                 
+      607 +              ))}                                             
+      608 +            </SelectContent>                                  
+      609 +          </Select>                                           
+      610 +          <p className="text-xs text-muted-foreground">       
+      611 +            Fields below will be pre-filled from the preset. Y
+          +ou can still edit                                             
+      612 +            them.                                             
+      613 +          </p>                                                
+      614 +        </div>                                                
+      615 +      )}                                                      
+      616 +                                                              
+      617        {canInstall && (
+      618          <div className="space-y-6">
+      619            {/* Non-secret Environment Variables (always editabl
+           e) */}
+
+⏺ Now add the presetValueToString helper at module bottom:
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Update(frontend/src/app/mcp/registry/_parts/local-server-install-dialog.tsx)
+  ⎿  Added 8 lines
+      1001    );
+      1002  }
+      1003  
+      1004 +function presetValueToString(                                
+      1005 +  value: string | number | boolean | string[] | null | undefi
+           +ned,                                                         
+      1006 +): string {                                                  
+      1007 +  if (value === null || value === undefined) return "";      
+      1008 +  if (Array.isArray(value)) return value.join(",");          
+      1009 +  return String(value);                                      
+      1010 +}                                                            
+      1011 +                                                             
+      1012  const MAX_TEXTAREA_HEIGHT = 200;
+      1013  
+      1014  function AutoResizeTextarea({
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ Named bundles of pre-filled values that users can pick when installing this   
+  server. Keys must match a prompt-on-install field above (env var key or       
+  user-config field name). WHY? Can you just show all the fields here and make  
+  me fill them                                                                  
+
+⏺ Good point. Let me check how additionalHeaders + env vars map to keys, then
+  redesign the card.
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Update(frontend/src/app/mcp/registry/_parts/mcp-catalog-form.utils.ts)
+  ⎿  Added 1 line, removed 1 line
+      830    return userConfig;
+      831  }
+      832  
+      833 -function getAdditionalHeaderFieldName(params: {               
+      833 +export function getAdditionalHeaderFieldName(params: {        
+      834    fieldName?: string;
+      835    headerName: string;
+      836    index: number;
+
+⏺ Now rewriting the presets section so each preset shows the actual
+  prompt-on-install fields as typed inputs:
+⏺ Write(frontend/src/app/mcp/registry/_parts/presets-section.tsx)
+  ⎿  Added 178 lines, removed 107 lines
+      1  import { Plus, Trash2 } from "lucide-react";
+      2  import { type Control, useFieldArray, type UseFormReturn } from 
+         "react-hook-form";
+      3  import { Button } from "@/components/ui/button";
+      4 +import { Checkbox } from "@/components/ui/checkbox";            
+      5  import {
+      6    FormControl,
+      7    FormField,
+     ...
+      10    FormMessage,
+      11  } from "@/components/ui/form";
+      12  import { Input } from "@/components/ui/input";
+      13 +import { Label } from "@/components/ui/label";                 
+      14  import type { McpCatalogFormValues } from "./mcp-catalog-form.t
+          ypes";
+      15 +import { getAdditionalHeaderFieldName } from "./mcp-catalog-for
+         +m.utils";                                                      
+      16  
+      17  type PresetValuePrimitive = string | number | boolean | string[
+          ];
+      18  
+      19 +type PromptedField = {                                         
+      20 +  key: string;                                                 
+      21 +  label: string;                                               
+      22 +  type: "string" | "number" | "boolean" | "secret";            
+      23 +  description?: string;                                        
+      24 +};                                                             
+      25 +                                                               
+      26  interface PresetsSectionProps {
+      27    control: Control<McpCatalogFormValues>;
+      28    form: UseFormReturn<McpCatalogFormValues>;
+     ...
+      33      control,
+      34      name: "presets",
+      35    });
+      36 +  const promptedFields = usePromptedFields(form);              
+      37  
+      38    return (
+      39      <div className="space-y-4">
+     ...
+      48              )}
+      49            </div>
+      50            <p className="text-sm text-muted-foreground">
+      40 -            Named bundles of pre-filled values that users can p
+         -ick when                                                       
+      41 -            installing this server. Keys must match a prompt-on
+         --install field                                                 
+      42 -            above (env var key or user-config field name).     
+      51 +            Pre-filled values users can pick from when installi
+         +ng this server.                                                
+      52            </p>
+      53          </div>
+      54          <Button
+     ...
+      56            variant="outline"
+      57            size="sm"
+      58            onClick={() => append({ name: "", description: "", va
+          lues: {} })}
+      59 +          disabled={promptedFields.length === 0}               
+      60          >
+      61            <Plus className="h-4 w-4" />
+      62            Add preset
+      63          </Button>
+      64        </div>
+      65  
+      56 -      {fields.length > 0 && (                                  
+      57 -        <div className="space-y-3">                            
+      58 -          {fields.map((field, index) => (                      
+      59 -            <PresetCard                                        
+      60 -              key={field.id}                                   
+      61 -              control={control}                                
+      62 -              form={form}                                      
+      63 -              index={index}                                    
+      64 -              onRemove={() => remove(index)}                   
+      65 -            />                                                 
+      66 -          ))}                                                  
+      67 -        </div>                                                 
+      66 +      {promptedFields.length === 0 ? (                         
+      67 +        <p className="text-xs text-muted-foreground italic">   
+      68 +          Mark at least one environment variable or header as  
+      69 +          "prompt on installation" above to enable presets.    
+      70 +        </p>                                                   
+      71 +      ) : (                                                    
+      72 +        fields.length > 0 && (                                 
+      73 +          <div className="space-y-3">                          
+      74 +            {fields.map((field, index) => (                    
+      75 +              <PresetCard                                      
+      76 +                key={field.id}                                 
+      77 +                control={control}                              
+      78 +                form={form}                                    
+      79 +                index={index}                                  
+      80 +                promptedFields={promptedFields}                
+      81 +                onRemove={() => remove(index)}                 
+      82 +              />                                               
+      83 +            ))}                                                
+      84 +          </div>                                               
+      85 +        )                                                      
+      86        )}
+      87      </div>
+      88    );
+     ...
+       92    control: Control<McpCatalogFormValues>;
+       93    form: UseFormReturn<McpCatalogFormValues>;
+       94    index: number;
+       95 +  promptedFields: PromptedField[];                            
+       96    onRemove: () => void;
+       97  }
+       98  
+       80 -function PresetCard({ control, form, index, onRemove }: Preset
+          -CardProps) {                                                  
+       99 +function PresetCard({                                         
+      100 +  control,                                                    
+      101 +  form,                                                       
+      102 +  index,                                                      
+      103 +  promptedFields,                                             
+      104 +  onRemove,                                                   
+      105 +}: PresetCardProps) {                                         
+      106    const values = (form.watch(`presets.${index}.values`) ?? {})
+            as Record<
+      107      string,
+      108      PresetValuePrimitive
+      109    >;
+       85 -  const entries = Object.entries(values);                     
+      110  
+       87 -  const setValues = (next: Record<string, PresetValuePrimitive
+          ->) => {                                                       
+       88 -    form.setValue(`presets.${index}.values`, next, {          
+      111 +  const setFieldValue = (key: string, next: PresetValuePrimiti
+          +ve | null) => {                                               
+      112 +    const updated = { ...values };                            
+      113 +    if (next === null || next === "") {                       
+      114 +      delete updated[key];                                    
+      115 +    } else {                                                  
+      116 +      updated[key] = next;                                    
+      117 +    }                                                         
+      118 +    form.setValue(`presets.${index}.values`, updated, {       
+      119        shouldDirty: true,
+      120        shouldValidate: false,
+      121      });
+      122    };
+      123  
+       94 -  const updateKey = (oldKey: string, newKey: string) => {     
+       95 -    if (newKey === oldKey) return;                            
+       96 -    const next: Record<string, PresetValuePrimitive> = {};    
+       97 -    for (const [k, v] of entries) {                           
+       98 -      next[k === oldKey ? newKey : k] = v;                    
+       99 -    }                                                         
+      100 -    setValues(next);                                          
+      101 -  };                                                          
+      102 -                                                              
+      103 -  const updateValue = (key: string, raw: string) => {         
+      104 -    setValues({ ...values, [key]: raw });                     
+      105 -  };                                                          
+      106 -                                                              
+      107 -  const removeEntry = (key: string) => {                      
+      108 -    const next = { ...values };                               
+      109 -    delete next[key];                                         
+      110 -    setValues(next);                                          
+      111 -  };                                                          
+      112 -                                                              
+      113 -  const addEntry = () => {                                    
+      114 -    let key = "new_key";                                      
+      115 -    let suffix = 1;                                           
+      116 -    while (key in values) {                                   
+      117 -      suffix += 1;                                            
+      118 -      key = `new_key_${suffix}`;                              
+      119 -    }                                                         
+      120 -    setValues({ ...values, [key]: "" });                      
+      121 -  };                                                          
+      122 -                                                              
+      124    return (
+      124 -    <div className="rounded-md border p-4 space-y-3">         
+      125 +    <div className="rounded-md border p-4 space-y-4">         
+      126        <div className="grid grid-cols-[1fr_auto] gap-2">
+      127          <FormField
+      128            control={control}
+     ...
+      167          )}
+      168        />
+      169  
+      169 -      <div className="space-y-2">                             
+      170 -        <div className="flex items-center justify-between">   
+      171 -          <span className="text-xs font-medium">Values</span> 
+      172 -          <Button                                             
+      173 -            type="button"                                     
+      174 -            variant="ghost"                                   
+      175 -            size="sm"                                         
+      176 -            onClick={addEntry}                                
+      177 -            className="h-7 px-2 text-xs"                      
+      178 -          >                                                   
+      179 -            <Plus className="h-3 w-3" />                      
+      180 -            Add value                                         
+      181 -          </Button>                                           
+      182 -        </div>                                                
+      183 -        {entries.length === 0 ? (                             
+      184 -          <p className="text-xs text-muted-foreground italic">
+      185 -            No values yet. Selecting this preset on install wo
+          -uld leave fields                                              
+      186 -            blank.                                            
+      187 -          </p>                                                
+      188 -        ) : (                                                 
+      189 -          <div className="space-y-2">                         
+      190 -            {entries.map(([key, value]) => (                  
+      191 -              <div                                            
+      192 -                key={key}                                     
+      193 -                className="grid grid-cols-[minmax(0,1fr)_minma
+          -x(0,1.5fr)_auto] gap-2 items-center"                          
+      194 -              >                                               
+      195 -                <Input                                        
+      196 -                  defaultValue={key}                          
+      197 -                  placeholder="field key"                     
+      198 -                  className="font-mono text-xs"               
+      199 -                  onBlur={(e) => updateKey(key, e.target.value
+          -.trim())}                                                     
+      200 -                />                                            
+      201 -                <Input                                        
+      202 -                  value={                                     
+      203 -                    Array.isArray(value)                      
+      204 -                      ? value.join(",")                       
+      205 -                      : value === undefined || value === null 
+      206 -                        ? ""                                  
+      207 -                        : String(value)                       
+      208 -                  }                                           
+      209 -                  placeholder="value"                         
+      210 -                  className="text-xs"                         
+      211 -                  onChange={(e) => updateValue(key, e.target.v
+          -alue)}                                                        
+      212 -                />                                            
+      213 -                <Button                                       
+      214 -                  type="button"                               
+      215 -                  variant="ghost"                             
+      216 -                  size="icon"                                 
+      217 -                  className="text-muted-foreground hover:text-
+          -destructive h-8 w-8"                                          
+      218 -                  onClick={() => removeEntry(key)}            
+      219 -                  aria-label="Remove value"                   
+      220 -                >                                             
+      221 -                  <Trash2 className="h-3.5 w-3.5" />          
+      222 -                </Button>                                     
+      223 -              </div>                                          
+      224 -            ))}                                               
+      225 -          </div>                                              
+      226 -        )}                                                    
+      170 +      <div className="space-y-3">                             
+      171 +        <span className="text-xs font-medium">Values</span>   
+      172 +        {promptedFields.map((pf) => (                         
+      173 +          <PresetFieldInput                                   
+      174 +            key={pf.key}                                      
+      175 +            field={pf}                                        
+      176 +            value={values[pf.key]}                            
+      177 +            onChange={(next) => setFieldValue(pf.key, next)}  
+      178 +          />                                                  
+      179 +        ))}                                                   
+      180        </div>
+      181      </div>
+      182    );
+      183  }
+      184 +                                                              
+      185 +interface PresetFieldInputProps {                             
+      186 +  field: PromptedField;                                       
+      187 +  value: PresetValuePrimitive | undefined;                    
+      188 +  onChange: (next: PresetValuePrimitive | null) => void;      
+      189 +}                                                             
+      190 +                                                              
+      191 +function PresetFieldInput({ field, value, onChange }: PresetFi
+          +eldInputProps) {                                              
+      192 +  const id = `preset-field-${field.key}`;                     
+      193 +                                                              
+      194 +  if (field.type === "boolean") {                             
+      195 +    return (                                                  
+      196 +      <div className="flex items-center gap-2">               
+      197 +        <Checkbox                                             
+      198 +          id={id}                                             
+      199 +          checked={value === true || value === "true"}        
+      200 +          onCheckedChange={(checked) => onChange(checked === t
+          +rue)}                                                         
+      201 +        />                                                    
+      202 +        <Label htmlFor={id} className="text-xs cursor-pointer"
+          +>                                                             
+      203 +          {field.label}                                       
+      204 +          <span className="ml-2 font-mono text-muted-foregroun
+          +d">                                                           
+      205 +            {field.key}                                       
+      206 +          </span>                                             
+      207 +        </Label>                                              
+      208 +      </div>                                                  
+      209 +    );                                                        
+      210 +  }                                                           
+      211 +                                                              
+      212 +  return (                                                    
+      213 +    <div className="grid grid-cols-[160px_1fr] items-center ga
+          +p-3">                                                         
+      214 +      <Label htmlFor={id} className="text-xs">                
+      215 +        <span>{field.label}</span>                            
+      216 +        {field.label !== field.key && (                       
+      217 +          <span className="ml-2 font-mono text-[10px] text-mut
+          +ed-foreground">                                               
+      218 +            {field.key}                                       
+      219 +          </span>                                             
+      220 +        )}                                                    
+      221 +      </Label>                                                
+      222 +      <Input                                                  
+      223 +        id={id}                                               
+      224 +        type={                                                
+      225 +          field.type === "secret"                             
+      226 +            ? "password"                                      
+      227 +            : field.type === "number"                         
+      228 +              ? "number"                                      
+      229 +              : "text"                                        
+      230 +        }                                                     
+      231 +        placeholder={field.description}                       
+      232 +        value={                                               
+      233 +          Array.isArray(value)                                
+      234 +            ? value.join(",")                                 
+      235 +            : value === undefined || value === null           
+      236 +              ? ""                                            
+      237 +              : String(value)                                 
+      238 +        }                                                     
+      239 +        onChange={(e) => {                                    
+      240 +          const raw = e.target.value;                         
+      241 +          if (raw === "") {                                   
+      242 +            onChange(null);                                   
+      243 +            return;                                           
+      244 +          }                                                   
+      245 +          if (field.type === "number") {                      
+      246 +            const num = Number(raw);                          
+      247 +            onChange(Number.isNaN(num) ? raw : num);          
+      248 +          } else {                                            
+      249 +            onChange(raw);                                    
+      250 +          }                                                   
+      251 +        }}                                                    
+      252 +      />                                                      
+      253 +    </div>                                                    
+      254 +  );                                                          
+      255 +}                                                             
+      256 +                                                              
+      257 +function usePromptedFields(                                   
+      258 +  form: UseFormReturn<McpCatalogFormValues>,                  
+      259 +): PromptedField[] {                                          
+      260 +  const envVars = form.watch("localConfig.environment") ?? [];
+      261 +  const headers = form.watch("additionalHeaders") ?? [];      
+      262 +  const result: PromptedField[] = [];                         
+      263 +                                                              
+      264 +  for (const env of envVars) {                                
+      265 +    if (!env?.promptOnInstallation || !env.key) continue;     
+      266 +    const t =                                                 
+      267 +      env.type === "secret"                                   
+      268 +        ? "secret"                                            
+      269 +        : env.type === "boolean"                              
+      270 +          ? "boolean"                                         
+      271 +          : env.type === "number"                             
+      272 +            ? "number"                                        
+      273 +            : "string";                                       
+      274 +    result.push({                                             
+      275 +      key: env.key,                                           
+      276 +      label: env.key,                                         
+      277 +      type: t,                                                
+      278 +      description: env.description,                           
+      279 +    });                                                       
+      280 +  }                                                           
+      281 +                                                              
+      282 +  const usedFieldNames = new Set<string>();                   
+      283 +  for (const [index, header] of headers.entries()) {          
+      284 +    if (!header?.promptOnInstallation || !header.headerName) c
+          +ontinue;                                                      
+      285 +    const fieldName = getAdditionalHeaderFieldName({          
+      286 +      fieldName: header.fieldName,                            
+      287 +      headerName: header.headerName,                          
+      288 +      index,                                                  
+      289 +      usedFieldNames,                                         
+      290 +    });                                                       
+      291 +    usedFieldNames.add(fieldName);                            
+      292 +    result.push({                                             
+      293 +      key: fieldName,                                         
+      294 +      label: header.headerName,                               
+      295 +      type: "string",                                         
+      296 +      description: header.description || undefined,           
+      297 +    });                                                       
+      298 +  }                                                           
+      299 +                                                              
+      300 +  return result;                                              
+      301 +}                                                             
+
+⏺ Now wire the remote install dialog the same way:
+
+⏺ Update(frontend/src/app/mcp/registry/_parts/remote-server-install-dialog.tsx)
+  ⎿  Added 18 lines
+      224      }),
+      225    );
+      226    const hasConfig = Object.keys(promptableUserConfig).length >
+            0;
+      227 +                                                              
+      228 +  const presets = catalogItem?.presets ?? [];                 
+      229 +  const promptableKeys = new Set(Object.keys(promptableUserCon
+          +fig));                                                        
+      230 +  const presetCanFillSomething = presets.length > 0 && prompta
+          +bleKeys.size > 0;                                             
+      231 +                                                              
+      232 +  const applyPreset = (presetName: string) => {               
+      233 +    const preset = presets.find((p) => p.name === presetName);
+      234 +    if (!preset) return;                                      
+      235 +    const patch: Record<string, string> = {};                 
+      236 +    for (const [key, value] of Object.entries(preset.values ??
+          + {})) {                                                       
+      237 +      if (!promptableKeys.has(key)) continue;                 
+      238 +      if (value === null || value === undefined) continue;    
+      239 +      patch[key] = Array.isArray(value) ? value.join(",") : St
+          +ring(value);                                                  
+      240 +    }                                                         
+      241 +    if (Object.keys(patch).length > 0) {                      
+      242 +      setConfigValues((prev) => ({ ...prev, ...patch }));     
+      243 +    }                                                         
+      244 +  };                                                          
+      245    const hasOAuth = !!catalogItem.oauthConfig;
+      246    const usesBrowserOAuth =
+      247      catalogItem.oauthConfig?.grant_type !== "client_credential
+           s";
+
+⏺ Update(frontend/src/app/mcp/registry/_parts/remote-server-install-dialog.tsx)
+  ⎿  Added 27 lines
+      389          </Alert>
+      390        )}
+      391  
+      392 +      {canInstall && presetCanFillSomething && (              
+      393 +        <div className="space-y-2">                           
+      394 +          <Label>Preset</Label>                               
+      395 +          <Select onValueChange={applyPreset}>                
+      396 +            <SelectTrigger>                                   
+      397 +              <SelectValue placeholder="-- Select a preset to 
+          +pre-fill fields --" />                                        
+      398 +            </SelectTrigger>                                  
+      399 +            <SelectContent>                                   
+      400 +              {presets.map((preset) => (                      
+      401 +                <SelectItem key={preset.name} value={preset.na
+          +me}>                                                          
+      402 +                  {preset.name}                               
+      403 +                  {preset.description ? (                     
+      404 +                    <span className="ml-2 text-xs text-muted-f
+          +oreground">                                                   
+      405 +                      {preset.description}                    
+      406 +                    </span>                                   
+      407 +                  ) : null}                                   
+      408 +                </SelectItem>                                 
+      409 +              ))}                                             
+      410 +            </SelectContent>                                  
+      411 +          </Select>                                           
+      412 +          <p className="text-xs text-muted-foreground">       
+      413 +            Fields below will be pre-filled from the preset. Y
+          +ou can still edit                                             
+      414 +            them.                                             
+      415 +          </p>                                                
+      416 +        </div>                                                
+      417 +      )}                                                      
+      418 +                                                              
+      419        {/* Config fields - always show when config exists */}
+      420        {canInstall && hasConfig && (
+      421          <div className="space-y-4">
+
+⏺ Type-check the touched frontend files:
+
+⏺ Bash(cd /Users/ildar/code/archestra/platform/frontend && pnpm exec tsc
+      --noEmit 2>&1 | grep -E
+      "preset|presets-section|local-server-install|remote-server-install|mcp…)
+  ⎿  Interrupted · What should Claude do instead?

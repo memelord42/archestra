@@ -8,38 +8,38 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { CatalogDetailDialog } from "./_parts/catalog-detail-dialog";
 import {
-  envHealth,
-  envsForCatalog,
   podsForCatalog,
   podsRunning,
+  presetHealth,
+  presetsForCatalog,
   tenancyLabel,
 } from "./_parts/utils";
 import { useSpikeStore } from "./_seed/store";
 import type { CatalogItem } from "./_seed/types";
 
 export default function RegistryListPage() {
-  const { catalogItems, environments, credentials, pods } = useSpikeStore();
+  const { catalogItems, presets, credentials, pods, term } = useSpikeStore();
   const [openCat, setOpenCat] = useState<CatalogItem | null>(null);
 
   const enriched = useMemo(
     () =>
       catalogItems.map((c) => {
-        const envs = envsForCatalog(environments, c.id);
+        const items = presetsForCatalog(presets, c.id);
         const cpods = podsForCatalog(pods, c.id);
         const callers = credentials.filter((cred) => {
-          const env = environments.find((e) => e.id === cred.environmentId);
-          return env?.catalogId === c.id;
+          const preset = presets.find((p) => p.id === cred.presetId);
+          return preset?.catalogId === c.id;
         }).length;
         return {
           cat: c,
-          envCount: envs.length,
+          presetCount: items.length,
           callers,
           podCount: cpods.length,
           running: podsRunning(cpods),
-          health: envHealth(cpods.map((p) => p.status)),
+          health: presetHealth(cpods.map((p) => p.status)),
         };
       }),
-    [catalogItems, environments, credentials, pods],
+    [catalogItems, presets, credentials, pods],
   );
 
   return (
@@ -57,7 +57,7 @@ export default function RegistryListPage() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {enriched.map(
-          ({ cat, envCount, callers, podCount, running, health }) => (
+          ({ cat, presetCount, callers, podCount, running, health }) => (
             <Card
               key={cat.id}
               className="flex h-full cursor-pointer flex-col gap-4 pt-4 transition-colors hover:border-primary/40"
@@ -105,7 +105,8 @@ export default function RegistryListPage() {
                     <div className="h-4 w-px bg-border" />
                     <div className="flex items-center gap-1">
                       <Wrench className="h-3.5 w-3.5" />
-                      {envCount} {envCount === 1 ? "env" : "envs"}
+                      {presetCount}{" "}
+                      {presetCount === 1 ? term.singular : term.plural}
                     </div>
                     <div className="h-4 w-px bg-border" />
                     <div className="flex items-center gap-1">

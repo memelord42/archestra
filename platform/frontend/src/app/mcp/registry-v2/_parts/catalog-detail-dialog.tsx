@@ -18,32 +18,17 @@ import type { CatalogItem } from "../_seed/types";
 import { ConfigurationSection } from "./dialog-sections/configuration";
 import { CredentialsSection } from "./dialog-sections/credentials";
 import { DeploymentsSection } from "./dialog-sections/deployments";
-import { EnvironmentsSection } from "./dialog-sections/environments";
 import { K8sYamlSection } from "./dialog-sections/k8s-yaml";
-import { envHealth, podsForCatalog, podsRunning } from "./utils";
+import { PresetsSection } from "./dialog-sections/presets";
+import { podsForCatalog, podsRunning, presetHealth } from "./utils";
 
 type Page =
   | "configuration"
-  | "environments"
+  | "presets"
   | "credentials"
   | "deployments"
   | "k8s-yaml";
 
-const navItems: { id: Page; label: string }[] = [
-  { id: "configuration", label: "Configuration" },
-  { id: "environments", label: "Environments" },
-  { id: "credentials", label: "Credentials" },
-  { id: "deployments", label: "Deployments" },
-  { id: "k8s-yaml", label: "K8s YAML" },
-];
-
-const titles: Record<Page, string> = {
-  configuration: "Configuration",
-  environments: "Environments",
-  credentials: "Credentials",
-  deployments: "Deployments",
-  "k8s-yaml": "K8s YAML",
-};
 
 export function CatalogDetailDialog({
   cat,
@@ -55,22 +40,38 @@ export function CatalogDetailDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const [page, setPage] = useState<Page>("configuration");
-  const { environments, credentials, pods } = useSpikeStore();
+  const { presets, credentials, pods, term } = useSpikeStore();
+
+  const navItems: { id: Page; label: string }[] = [
+    { id: "configuration", label: "Configuration" },
+    { id: "presets", label: term.Plural },
+    { id: "credentials", label: "Credentials" },
+    { id: "deployments", label: "Deployments" },
+    { id: "k8s-yaml", label: "K8s YAML" },
+  ];
+
+  const titles: Record<Page, string> = {
+    configuration: "Configuration",
+    presets: term.Plural,
+    credentials: "Credentials",
+    deployments: "Deployments",
+    "k8s-yaml": "K8s YAML",
+  };
 
   if (!cat) return null;
 
   const cpods = podsForCatalog(pods, cat.id);
   const running = podsRunning(cpods);
-  const health = envHealth(cpods.map((p) => p.status));
-  const envCount = environments.filter((e) => e.catalogId === cat.id).length;
+  const health = presetHealth(cpods.map((p) => p.status));
+  const presetCount = presets.filter((p) => p.catalogId === cat.id).length;
   const credCount = credentials.filter((c) => {
-    const env = environments.find((e) => e.id === c.environmentId);
-    return env?.catalogId === cat.id;
+    const preset = presets.find((p) => p.id === c.presetId);
+    return preset?.catalogId === cat.id;
   }).length;
 
   const counts: Record<Page, number | undefined> = {
     configuration: undefined,
-    environments: envCount,
+    presets: presetCount,
     credentials: credCount,
     deployments: cpods.length,
     "k8s-yaml": undefined,
@@ -157,9 +158,7 @@ export function CatalogDetailDialog({
           </div>
           <ScrollArea className="min-h-0 flex-1">
             {page === "configuration" && <ConfigurationSection cat={cat} />}
-            {page === "environments" && (
-              <EnvironmentsSection catalogId={cat.id} />
-            )}
+            {page === "presets" && <PresetsSection catalogId={cat.id} />}
             {page === "credentials" && <CredentialsSection cat={cat} />}
             {page === "deployments" && (
               <DeploymentsSection catalogId={cat.id} />

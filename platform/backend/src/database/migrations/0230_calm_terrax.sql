@@ -1,0 +1,3 @@
+ALTER TABLE "internal_mcp_catalog" ADD COLUMN "parent_catalog_id" uuid;--> statement-breakpoint
+ALTER TABLE "internal_mcp_catalog" ADD CONSTRAINT "internal_mcp_catalog_parent_catalog_id_internal_mcp_catalog_id_fk" FOREIGN KEY ("parent_catalog_id") REFERENCES "public"."internal_mcp_catalog"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "internal_mcp_catalog_parent_catalog_id_idx" ON "internal_mcp_catalog" USING btree ("parent_catalog_id");

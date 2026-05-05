@@ -42,7 +42,7 @@ export function AddEnvFieldDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
-  const { addField } = useSpikeStore();
+  const { addField, term } = useSpikeStore();
   const [key, setKey] = useState("");
   const [type, setType] = useState<FieldType>("string");
   const [required, setRequired] = useState(true);
@@ -85,10 +85,10 @@ export function AddEnvFieldDialog({
     >
       <DialogContent className="flex max-h-[85vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[480px]">
         <DialogHeader className="border-b px-6 py-4">
-          <DialogTitle>Add environment field</DialogTitle>
+          <DialogTitle>Add env field</DialogTitle>
           <DialogDescription>
-            Admin-set per environment. Values are supplied when creating each
-            environment.
+            Admin-set per {term.singular}. Values are supplied when creating
+            each {term.singular}.
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
@@ -156,8 +156,8 @@ export function AddEnvFieldDialog({
               <div className="space-y-0.5">
                 <div className="text-sm font-medium">Static value</div>
                 <div className="text-xs text-muted-foreground">
-                  Fixed at the catalog level. Same for every environment, not
-                  prompted in the env editor.
+                  Fixed at the catalog level. Same for every {term.singular},
+                  not prompted in the {term.singular} editor.
                 </div>
               </div>
             </Label>

@@ -7,6 +7,7 @@ const {
   deleteInternalMcpCatalogItem,
   getDeploymentYamlPreview,
   getInternalMcpCatalog,
+  getInternalMcpCatalogItem,
   getInternalMcpCatalogLabelKeys,
   getInternalMcpCatalogLabelValues,
   getInternalMcpCatalogTools,
@@ -35,6 +36,15 @@ export function useInternalMcpCatalog(params?: InternalMcpCatalogParams) {
     initialData: params?.initialData,
     enabled: params?.enabled,
   });
+}
+
+export async function fetchInternalMcpCatalogItem(
+  id: string,
+): Promise<
+  archestraApiTypes.GetInternalMcpCatalogResponses["200"][number] | null
+> {
+  const response = await getInternalMcpCatalogItem({ path: { id } });
+  return response.data ?? null;
 }
 
 export function useMcpCatalogLabelKeys() {

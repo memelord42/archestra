@@ -26448,6 +26448,7 @@ export type GetInternalMcpCatalogResponses = {
         organizationId: string | null;
         authorId: string | null;
         scope: 'personal' | 'team' | 'org';
+        parentCatalogId: string | null;
         createdAt: string;
         updatedAt: string;
         labels: Array<{
@@ -26457,6 +26458,11 @@ export type GetInternalMcpCatalogResponses = {
         teams: Array<{
             id: string;
             name: string;
+        }>;
+        children: Array<{
+            id: string;
+            name: string;
+            description?: string | null;
         }>;
         authorName?: string | null;
     }>;
@@ -26579,6 +26585,7 @@ export type CreateInternalMcpCatalogItemData = {
         } | null;
         icon?: string | null;
         scope?: 'personal' | 'team' | 'org';
+        parentCatalogId?: string | null;
         labels?: Array<{
             key: string;
             value: string;
@@ -26779,6 +26786,7 @@ export type CreateInternalMcpCatalogItemResponses = {
         organizationId: string | null;
         authorId: string | null;
         scope: 'personal' | 'team' | 'org';
+        parentCatalogId: string | null;
         createdAt: string;
         updatedAt: string;
         labels: Array<{
@@ -26788,6 +26796,11 @@ export type CreateInternalMcpCatalogItemResponses = {
         teams: Array<{
             id: string;
             name: string;
+        }>;
+        children: Array<{
+            id: string;
+            name: string;
+            description?: string | null;
         }>;
         authorName?: string | null;
     };
@@ -27074,6 +27087,7 @@ export type GetInternalMcpCatalogItemResponses = {
         organizationId: string | null;
         authorId: string | null;
         scope: 'personal' | 'team' | 'org';
+        parentCatalogId: string | null;
         createdAt: string;
         updatedAt: string;
         labels: Array<{
@@ -27083,6 +27097,11 @@ export type GetInternalMcpCatalogItemResponses = {
         teams: Array<{
             id: string;
             name: string;
+        }>;
+        children: Array<{
+            id: string;
+            name: string;
+            description?: string | null;
         }>;
         authorName?: string | null;
     };
@@ -27203,6 +27222,7 @@ export type UpdateInternalMcpCatalogItemData = {
         } | null;
         icon?: string | null;
         scope?: 'personal' | 'team' | 'org';
+        parentCatalogId?: string | null;
         labels?: Array<{
             key: string;
             value: string;
@@ -27405,6 +27425,7 @@ export type UpdateInternalMcpCatalogItemResponses = {
         organizationId: string | null;
         authorId: string | null;
         scope: 'personal' | 'team' | 'org';
+        parentCatalogId: string | null;
         createdAt: string;
         updatedAt: string;
         labels: Array<{
@@ -27414,6 +27435,11 @@ export type UpdateInternalMcpCatalogItemResponses = {
         teams: Array<{
             id: string;
             name: string;
+        }>;
+        children: Array<{
+            id: string;
+            name: string;
+            description?: string | null;
         }>;
         authorName?: string | null;
     };

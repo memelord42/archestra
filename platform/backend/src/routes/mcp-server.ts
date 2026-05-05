@@ -214,34 +214,21 @@ const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
           serverData.catalogId,
         );
 
-        // Check for duplicate personal installation (same user, no team)
-        // Return existing server instead of erroring (idempotent behavior)
+        // Personal scope allows multiple installs per user. Each additional
+        // install of the same catalog by the same user gets a unique server
+        // name suffix so its tools (prefixed by mcp_server.name) don't collide
+        // with prior installs.
         if (serverData.scope === "personal") {
-          const existingPersonal = existingServers.find(
-            (s) => s.scope === "personal" && s.ownerId === user.id,
+          const ownPersonalNames = new Set(
+            existingServers
+              .filter((s) => s.scope === "personal" && s.ownerId === user.id)
+              .map((s) => s.name),
           );
-          if (existingPersonal) {
-            const catalogTools = await ToolModel.findByCatalogId(
-              serverData.catalogId,
+          if (ownPersonalNames.size > 0) {
+            serverData.name = uniquifyServerName(
+              serverData.name,
+              ownPersonalNames,
             );
-            const toolIds = catalogTools.map((t) => t.id);
-            if (toolIds.length > 0) {
-              const personalGateway = await AgentModel.ensurePersonalMcpGateway(
-                {
-                  userId: user.id,
-                  organizationId,
-                },
-              );
-              const targetAgentIds = Array.from(
-                new Set([personalGateway.id, ...(agentIds ?? [])]),
-              );
-              await AgentToolModel.bulkCreateForAgentsAndTools(
-                targetAgentIds,
-                toolIds,
-                { mcpServerId: existingPersonal.id },
-              );
-            }
-            return reply.send(existingPersonal);
           }
         }
 
@@ -616,7 +603,6 @@ const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
           try {
             // Capture catalogId before async callback to ensure it's available
             const capturedCatalogId = catalogItem.id;
-            const capturedCatalogName = catalogItem.name;
 
             // Set status to pending before starting the deployment
             await McpServerModel.update(mcpServer.id, {
@@ -679,11 +665,12 @@ const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
                 const tools =
                   await McpServerModel.getToolsFromServer(mcpServer);
 
-                // Persist tools in the database
-                // Use catalog item name (without userId) for tool naming to avoid duplicates across users
-                const toolNamePrefix = capturedCatalogName || mcpServer.name;
+                // Persist tools in the database. Prefix by mcp_server.name so
+                // multiple installs of the same catalog (under different
+                // server names) don't collide on the (catalogId, name) unique
+                // key.
                 const toolsToCreate = tools.map((tool) => ({
-                  name: ToolModel.slugifyName(toolNamePrefix, tool.name),
+                  name: ToolModel.slugifyName(mcpServer.name, tool.name),
                   description: tool.description,
                   parameters: tool.inputSchema,
                   meta: { _meta: tool._meta, annotations: tool.annotations },
@@ -2145,4 +2132,14 @@ async function validateScopeAndAuthorization(params: {
       );
     }
   }
+}
+
+function uniquifyServerName(
+  baseName: string,
+  taken: Set<string>,
+): string {
+  if (!taken.has(baseName)) return baseName;
+  let suffix = 2;
+  while (taken.has(`${baseName} (${suffix})`)) suffix += 1;
+  return `${baseName} (${suffix})`;
 }

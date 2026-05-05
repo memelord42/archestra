@@ -24,43 +24,44 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useSpikeStore } from "../_seed/store";
 import type { CatalogItem, Scope } from "../_seed/types";
-import { renderTemplate, visibleEnvsForUser } from "./utils";
+import { renderTemplate, visiblePresetsForUser } from "./utils";
 
 export function InstallDialog({
   cat,
   triggerLabel = "Install",
-  presetEnvironmentId,
+  initialPresetId,
 }: {
   cat: CatalogItem;
   triggerLabel?: string;
-  presetEnvironmentId?: string;
+  initialPresetId?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const { environments, currentUser, installCredential, pods } =
+  const { presets, currentUser, installCredential, pods, term } =
     useSpikeStore();
   const visible = useMemo(
     () =>
-      visibleEnvsForUser(
-        environments.filter((e) => e.catalogId === cat.id),
+      visiblePresetsForUser(
+        presets.filter((p) => p.catalogId === cat.id),
         currentUser.teamIds,
       ),
-    [environments, cat.id, currentUser.teamIds],
+    [presets, cat.id, currentUser.teamIds],
   );
-  const [envId, setEnvId] = useState(
-    presetEnvironmentId ?? visible[0]?.id ?? "",
+  const [presetId, setPresetId] = useState(
+    initialPresetId ?? visible[0]?.id ?? "",
   );
   const [scope, setScope] = useState<Scope>("personal");
   const [userValues, setUserValues] = useState<Record<string, string>>({});
-  const env = visible.find((e) => e.id === envId);
+  const preset = visible.find((p) => p.id === presetId);
 
   const userFields = cat.fields.filter((f) => f.kind === "user");
   const envFields = cat.fields.filter((f) => f.kind === "env");
 
   function submit() {
-    if (!env) return;
-    const matchingPod = pods.find((p) => p.environmentId === env.id) ?? pods[0];
+    if (!preset) return;
+    const matchingPod =
+      pods.find((p) => p.presetId === preset.id) ?? pods[0];
     installCredential({
-      environmentId: env.id,
+      presetId: preset.id,
       ownerId: currentUser.id,
       ownerEmail: currentUser.email,
       scope,
@@ -86,18 +87,18 @@ export function InstallDialog({
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Environment</Label>
-              <Select value={envId} onValueChange={setEnvId}>
+              <Label className="text-xs">{term.Singular}</Label>
+              <Select value={presetId} onValueChange={setPresetId}>
                 <SelectTrigger className="mt-1.5">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {visible.map((e) => (
-                    <SelectItem key={e.id} value={e.id}>
-                      {e.label}
-                      {e.visibility.kind === "team" && (
+                  {visible.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.label}
+                      {p.visibility.kind === "team" && (
                         <span className="ml-2 text-muted-foreground text-xs">
-                          ({e.visibility.teamName})
+                          ({p.visibility.teamName})
                         </span>
                       )}
                     </SelectItem>
@@ -105,7 +106,7 @@ export function InstallDialog({
                 </SelectContent>
               </Select>
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Filtered to environments your teams can access.
+                Filtered to {term.plural} your teams can access.
               </p>
             </div>
             <div>
@@ -166,12 +167,12 @@ export function InstallDialog({
             </>
           )}
 
-          {env && envFields.length > 0 && (
+          {preset && envFields.length > 0 && (
             <>
               <Separator />
               <div>
                 <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  From environment (preview)
+                  From {term.singular} (preview)
                 </div>
                 <div className="rounded-md border bg-muted/30 p-3">
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs font-mono">
@@ -179,7 +180,7 @@ export function InstallDialog({
                       <div key={f.key} className="flex gap-2">
                         <span className="text-muted-foreground">{f.key}</span>
                         <span className="truncate">
-                          {String(env.fieldValues[f.key] ?? "—")}
+                          {String(preset.fieldValues[f.key] ?? "—")}
                         </span>
                       </div>
                     ))}
@@ -189,7 +190,7 @@ export function InstallDialog({
             </>
           )}
 
-          {env && cat.mappings.some((m) => m.source.kind === "template") && (
+          {preset && cat.mappings.some((m) => m.source.kind === "template") && (
             <>
               <Separator />
               <div>
@@ -216,7 +217,7 @@ export function InstallDialog({
                           {m.source.kind === "template" &&
                             renderTemplate(
                               m.source.template,
-                              env.fieldValues,
+                              preset.fieldValues,
                               userValues,
                             )}
                         </div>

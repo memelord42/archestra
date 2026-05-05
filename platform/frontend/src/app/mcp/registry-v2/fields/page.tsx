@@ -34,7 +34,8 @@ type Row = {
 };
 
 export default function CrossCatalogFieldsPage() {
-  const { catalogItems } = useSpikeStore();
+  const { catalogItems, term } = useSpikeStore();
+  const perPresetLabel = `per-${term.singular}`;
   const [catFilter, setCatFilter] = useState("all");
   const [kindFilter, setKindFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -60,12 +61,12 @@ export default function CrossCatalogFieldsPage() {
           key: f.key,
           type: f.type,
           required: f.required,
-          source: f.kind === "env" ? "per-environment" : (f.source ?? ""),
+          source: f.kind === "env" ? perPresetLabel : (f.source ?? ""),
           targets,
         };
       }),
     );
-  }, [catalogItems]);
+  }, [catalogItems, perPresetLabel]);
 
   const rows = useMemo(() => {
     return allRows
@@ -116,7 +117,7 @@ export default function CrossCatalogFieldsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All kinds</SelectItem>
-                <SelectItem value="env">Environment</SelectItem>
+                <SelectItem value="env">Env</SelectItem>
                 <SelectItem value="user">User</SelectItem>
               </SelectContent>
             </Select>
