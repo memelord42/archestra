@@ -10603,24 +10603,28 @@ export type PostV1A2aByAgentIdResponses = {
 
 export type PostV1A2aByAgentIdResponse = PostV1A2aByAgentIdResponses[keyof PostV1A2aByAgentIdResponses];
 
-export type GetV2A2aByAgentIdWellKnownAgentJsonData = {
+export type GetV2A2aByAgentIdWellKnownAgentCardJsonData = {
     body?: never;
     path: {
         agentId: string;
     };
     query?: never;
-    url: '/v2/a2a/{agentId}/.well-known/agent.json';
+    url: '/v2/a2a/{agentId}/.well-known/agent-card.json';
 };
 
-export type GetV2A2aByAgentIdWellKnownAgentJsonResponses = {
+export type GetV2A2aByAgentIdWellKnownAgentCardJsonResponses = {
     /**
      * Default Response
      */
     200: {
         name: string;
         description: string;
-        url: string;
         version: string;
+        supportedInterfaces: Array<{
+            url: string;
+            protocolBinding: string;
+            protocolVersion: string;
+        }>;
         capabilities: {
             streaming: boolean;
             pushNotifications: boolean;
@@ -10639,7 +10643,7 @@ export type GetV2A2aByAgentIdWellKnownAgentJsonResponses = {
     };
 };
 
-export type GetV2A2aByAgentIdWellKnownAgentJsonResponse = GetV2A2aByAgentIdWellKnownAgentJsonResponses[keyof GetV2A2aByAgentIdWellKnownAgentJsonResponses];
+export type GetV2A2aByAgentIdWellKnownAgentCardJsonResponse = GetV2A2aByAgentIdWellKnownAgentCardJsonResponses[keyof GetV2A2aByAgentIdWellKnownAgentCardJsonResponses];
 
 export type PostV2A2aByAgentIdData = {
     body: {
