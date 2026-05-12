@@ -493,6 +493,13 @@ archestra:
     type: ClusterIP
     # Annotations to add to the Kubernetes Service
     annotations: {}
+    # Kubernetes Service ClientIP session affinity.
+    # Enable this only when the Service sees stable client IPs. For browser
+    # traffic behind an ingress or cloud load balancer, prefer the ingress or
+    # load balancer's cookie-based affinity controls instead.
+    sessionAffinity:
+      enabled: false
+      timeoutSeconds: 3600
     # Node ports for NodePort service type (optional)
     # Only used when service.type is NodePort
     nodePorts:
@@ -649,6 +656,14 @@ archestra:
       # connectionDraining:
       #   drainingTimeoutSec: 60
 
+      # Cookie-based session affinity for GKE Ingress BackendConfig.
+      # Use this when multiple platform pods serve browser chat traffic through
+      # GKE's external HTTP(S) load balancer.
+      sessionAffinity:
+        enabled: false
+        affinityType: GENERATED_COOKIE
+        affinityCookieTtlSec: 3600
+
       # Health check configuration for the backend service
       healthCheck:
         checkIntervalSec: 15
@@ -668,6 +683,12 @@ archestra:
       # Connection draining configuration
       # connectionDraining:
       #   drainingTimeoutSec: 60
+
+      # Cookie-based session affinity for GKE Ingress BackendConfig.
+      sessionAffinity:
+        enabled: false
+        affinityType: GENERATED_COOKIE
+        affinityCookieTtlSec: 3600
 
       # Health check configuration for the frontend service
       healthCheck:

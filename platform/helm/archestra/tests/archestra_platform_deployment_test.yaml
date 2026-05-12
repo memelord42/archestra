@@ -1257,6 +1257,28 @@ tests:
           path: spec.type
           value: LoadBalancer
 
+  - it: should not configure service session affinity by default
+    documentIndex: 0
+    asserts:
+      - notExists:
+          path: spec.sessionAffinity
+      - notExists:
+          path: spec.sessionAffinityConfig
+
+  - it: should configure service ClientIP session affinity when enabled
+    documentIndex: 0
+    set:
+      archestra.service.sessionAffinity:
+        enabled: true
+        timeoutSeconds: 1800
+    asserts:
+      - equal:
+          path: spec.sessionAffinity
+          value: ClientIP
+      - equal:
+          path: spec.sessionAffinityConfig.clientIP.timeoutSeconds
+          value: 1800
+
   # NodePort configuration tests
   - it: should not have nodePort fields when service type is ClusterIP
     documentIndex: 0
@@ -1387,7 +1409,7 @@ tests:
           value: 10
       - equal:
           path: spec.template.spec.containers[0].startupProbe.timeoutSeconds
-          value: 5
+          value: 45
       - equal:
           path: spec.template.spec.containers[0].startupProbe.failureThreshold
           value: 30
@@ -1408,10 +1430,10 @@ tests:
           value: 10
       - equal:
           path: spec.template.spec.containers[0].livenessProbe.timeoutSeconds
-          value: 5
+          value: 45
       - equal:
           path: spec.template.spec.containers[0].livenessProbe.failureThreshold
-          value: 3
+          value: 5
 
   - it: should have readiness probe configured
     documentIndex: 1
@@ -1429,7 +1451,7 @@ tests:
           value: 10
       - equal:
           path: spec.template.spec.containers[0].readinessProbe.timeoutSeconds
-          value: 5
+          value: 45
       - equal:
           path: spec.template.spec.containers[0].readinessProbe.failureThreshold
           value: 3

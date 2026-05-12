@@ -45,6 +45,12 @@ metadata:
   {{- end }}
 spec:
   type: {{ .Values.archestra.service.type | default "ClusterIP" }}
+  {{- if .Values.archestra.service.sessionAffinity.enabled }}
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: {{ .Values.archestra.service.sessionAffinity.timeoutSeconds }}
+  {{- end }}
   ports:
     - port: 9000
       targetPort: backend

@@ -237,6 +237,46 @@ tests:
       - notExists:
           path: spec.connectionDraining
 
+  - it: should not include sessionAffinity when not enabled
+    set:
+      archestra.gkeBackendConfig.enabled: true
+    documentIndex: 0
+    asserts:
+      - notExists:
+          path: spec.sessionAffinity
+
+  - it: should configure backend sessionAffinity when enabled
+    set:
+      archestra.gkeBackendConfig.enabled: true
+      archestra.gkeBackendConfig.backend.sessionAffinity:
+        enabled: true
+        affinityType: GENERATED_COOKIE
+        affinityCookieTtlSec: 1800
+    documentIndex: 0
+    asserts:
+      - equal:
+          path: spec.sessionAffinity.affinityType
+          value: GENERATED_COOKIE
+      - equal:
+          path: spec.sessionAffinity.affinityCookieTtlSec
+          value: 1800
+
+  - it: should configure frontend sessionAffinity when enabled
+    set:
+      archestra.gkeBackendConfig.enabled: true
+      archestra.gkeBackendConfig.frontend.sessionAffinity:
+        enabled: true
+        affinityType: GENERATED_COOKIE
+        affinityCookieTtlSec: 900
+    documentIndex: 1
+    asserts:
+      - equal:
+          path: spec.sessionAffinity.affinityType
+          value: GENERATED_COOKIE
+      - equal:
+          path: spec.sessionAffinity.affinityCookieTtlSec
+          value: 900
+
   - it: should not include connectionDraining when provided without drainingTimeoutSec (backend)
     set:
       archestra.gkeBackendConfig.enabled: true

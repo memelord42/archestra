@@ -26,6 +26,15 @@ spec:
     drainingTimeoutSec: {{ .drainingTimeoutSec }}
   {{- end }}
   {{- end }}
+  {{- with .Values.archestra.gkeBackendConfig.backend.sessionAffinity }}
+  {{- if .enabled }}
+  sessionAffinity:
+    affinityType: {{ .affinityType }}
+    {{- with .affinityCookieTtlSec }}
+    affinityCookieTtlSec: {{ . }}
+    {{- end }}
+  {{- end }}
+  {{- end }}
   healthCheck:
     checkIntervalSec: {{ .Values.archestra.gkeBackendConfig.backend.healthCheck.checkIntervalSec }}
     timeoutSec: {{ .Values.archestra.gkeBackendConfig.backend.healthCheck.timeoutSec }}
@@ -50,6 +59,15 @@ spec:
   {{- if .drainingTimeoutSec }}
   connectionDraining:
     drainingTimeoutSec: {{ .drainingTimeoutSec }}
+  {{- end }}
+  {{- end }}
+  {{- with .Values.archestra.gkeBackendConfig.frontend.sessionAffinity }}
+  {{- if .enabled }}
+  sessionAffinity:
+    affinityType: {{ .affinityType }}
+    {{- with .affinityCookieTtlSec }}
+    affinityCookieTtlSec: {{ . }}
+    {{- end }}
   {{- end }}
   {{- end }}
   healthCheck:

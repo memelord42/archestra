@@ -298,6 +298,7 @@ Practical starting point for worker autoscaling:
 
 - `archestra.service.type` - Service type: ClusterIP, NodePort, or LoadBalancer (default: ClusterIP)
 - `archestra.service.annotations` - Annotations to add to the Kubernetes Service for cloud provider integrations
+- `archestra.service.sessionAffinity` - Kubernetes Service ClientIP affinity. Use this only when the Service sees stable client IPs; for browser traffic through ingress, prefer load balancer or ingress cookie affinity.
 - `archestra.service.nodePorts` - Node ports for NodePort service type (backend, metrics, frontend)
 
 **Ingress Settings**:
@@ -311,18 +312,20 @@ Practical starting point for worker autoscaling:
 - `archestra.gkeBackendConfig.enabled` - Enable or disable GKE BackendConfig resources (default: false)
 - `archestra.gkeBackendConfig.backend.timeoutSec` - Request timeout for backend API (recommended: 600 for streaming)
 - `archestra.gkeBackendConfig.backend.connectionDraining.drainingTimeoutSec` - Connection draining timeout for backend
+- `archestra.gkeBackendConfig.backend.sessionAffinity` - Cookie-based backend affinity for GKE Ingress
 - `archestra.gkeBackendConfig.backend.healthCheck` - Health check configuration for backend (port 9000)
 - `archestra.gkeBackendConfig.frontend.timeoutSec` - Request timeout for frontend
 - `archestra.gkeBackendConfig.frontend.connectionDraining.drainingTimeoutSec` - Connection draining timeout for frontend
+- `archestra.gkeBackendConfig.frontend.sessionAffinity` - Cookie-based frontend affinity for GKE Ingress
 - `archestra.gkeBackendConfig.frontend.healthCheck` - Health check configuration for frontend (port 3000)
 
-#### Cloud Provider Configuration (Streaming Timeout Settings)
+#### Cloud Provider Configuration (Streaming and Session Affinity)
 
-**⚠️ IMPORTANT:** Archestra Platform requires proper timeout settings on the upstream load balancer. **Without longer timeouts, streaming responses may end prematurely**, resulting in a “network error”
+Archestra Platform needs longer upstream load balancer timeouts for streaming responses. When running more than one platform pod, deployments that serve chat traffic through an ingress or load balancer should also enable sticky sessions so a browser session continues to reach the same backend pod.
 
 ##### Google Cloud Platform (GKE)
 
-For GKE deployments using the GCE Ingress Controller, configure load balancer timeouts and health checks using BackendConfig resources. The Helm chart can create and manage these resources for you.
+For GKE deployments using the GCE Ingress Controller, configure load balancer timeouts, health checks, and cookie affinity using BackendConfig resources. The Helm chart can create and manage these resources for you.
 
 Enable the `gkeBackendConfig` section in your values:
 
@@ -334,10 +337,18 @@ archestra:
       timeoutSec: 600 # 10 minutes for streaming responses
       connectionDraining:
         drainingTimeoutSec: 60
+      sessionAffinity:
+        enabled: true
+        affinityType: GENERATED_COOKIE
+        affinityCookieTtlSec: 3600
     frontend:
       timeoutSec: 600
       connectionDraining:
         drainingTimeoutSec: 60
+      sessionAffinity:
+        enabled: true
+        affinityType: GENERATED_COOKIE
+        affinityCookieTtlSec: 3600
   service:
     annotations:
       cloud.google.com/backend-config: '{"ports": {"9000":"RELEASE_NAME-archestra-platform-backend-config", "3000":"RELEASE_NAME-archestra-platform-frontend-config"}}'
@@ -360,6 +371,16 @@ archestra:
     annotations:
       service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "http"
       service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "600"
+```
+
+For AWS ALB Ingress Controller, enable load balancer cookie stickiness on the Ingress target group:
+
+```yaml
+archestra:
+  ingress:
+    enabled: true
+    annotations:
+      alb.ingress.kubernetes.io/target-group-attributes: stickiness.enabled=true,stickiness.lb_cookie.duration_seconds=3600
 ```
 
 ##### Microsoft Azure (AKS)
@@ -386,6 +407,18 @@ archestra:
     annotations:
       nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
       nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+      nginx.ingress.kubernetes.io/affinity: "cookie"
+      nginx.ingress.kubernetes.io/session-cookie-max-age: "3600"
+```
+
+If traffic reaches the Kubernetes Service directly and client IPs are stable, you can use Kubernetes Service affinity instead:
+
+```yaml
+archestra:
+  service:
+    sessionAffinity:
+      enabled: true
+      timeoutSeconds: 3600
 ```
 
 For Traefik:
