@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { authQueryKeys } from "@/lib/auth/auth.query";
 import { authClient } from "@/lib/clients/auth/auth-client";
 
 type AuthClientError = {
@@ -22,7 +23,9 @@ export function useUpdateAccountNameMutation() {
     onSuccess: async (updated) => {
       if (!updated) return;
       toast.success("Name updated");
-      await queryClient.invalidateQueries({ queryKey: ["auth", "session"] });
+      await queryClient.invalidateQueries({
+        queryKey: authQueryKeys.session(),
+      });
     },
   });
 }
@@ -49,13 +52,15 @@ export function useChangeAccountPasswordMutation() {
       if (!changed) return;
       toast.success("Password changed");
       await queryClient.invalidateQueries({
-        queryKey: ["auth", "defaultCredentialsEnabled"],
+        queryKey: authQueryKeys.defaultCredentialsEnabled(),
       });
     },
   });
 }
 
 export function useSignInWithEmailMutation() {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async (params: {
       email: string;
@@ -70,6 +75,15 @@ export function useSignInWithEmailMutation() {
       if (error) {
         toast.error(getAuthErrorMessage(error, "Failed to sign in"));
         return null;
+      }
+
+      await queryClient.invalidateQueries({ queryKey: authQueryKeys.all });
+
+      if (!isDefaultAdminEmail) {
+        return {
+          requiresDefaultPasswordChange: false,
+          redirectUrl: data?.url ?? params.callbackURL ?? "/",
+        };
       }
 
       return {
