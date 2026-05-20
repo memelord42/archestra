@@ -1,0 +1,34 @@
+# Code execution runtime — the Dagger Engine that backs the archestra__run_python tool.
+#
+# Deployed with Dagger's official Helm chart (oci://registry.dagger.io/dagger-helm),
+# the same chart used in production (see docs/pages/platform-deployment.md). The root
+# Tiltfile loads this file only when ARCHESTRA_CODE_RUNTIME_ENABLED=true, so the
+# privileged engine is not deployed unless the feature is on.
+
+# pinned to the dagger CLI/SDK version — engine and client must match, so an
+# unpinned chart could deploy an engine the SDK refuses to talk to.
+DAGGER_VERSION = '0.20.8'
+
+# the chart renders a namespaced DaemonSet; create its namespace alongside it.
+k8s_yaml(blob('''apiVersion: v1
+kind: Namespace
+metadata:
+  name: dagger
+'''))
+
+# render the chart client-side and let Tilt own the apply — same pattern as the
+# mcp-rbac resources in Tiltfile.dev.
+k8s_yaml(local(
+  'helm template dagger oci://registry.dagger.io/dagger-helm --version ' +
+  DAGGER_VERSION + ' --namespace dagger',
+  quiet=True,
+))
+
+# a DaemonSet — on single-node KinD this is one engine pod. The backend resolves
+# its pod name at startup to build the kube-pod:// runner host (see Tiltfile.dev).
+k8s_resource(
+  'dagger-dagger-helm-engine',
+  new_name='dagger-engine',
+  labels=['code-runtime'],
+  objects=['dagger:namespace'],
+)

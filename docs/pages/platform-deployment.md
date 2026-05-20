@@ -961,7 +961,8 @@ The Dagger Engine runs as a privileged container. Run it on an isolated node poo
 
 Deployment by environment:
 
-- **Local dev / Quickstart** — set `ARCHESTRA_CODE_RUNTIME_ENABLED=true`. The SDK provisions an engine through the Docker socket automatically; no other configuration is needed.
+- **Local dev (Tilt)** — set `ARCHESTRA_CODE_RUNTIME_ENABLED=true`. `tilt up` deploys the Dagger Engine into the local cluster with [Dagger's Helm chart](https://docs.dagger.io/reference/deployment/kubernetes/) and wires the backend to it; no other configuration is needed.
+- **Docker Quickstart** — set `ARCHESTRA_CODE_RUNTIME_ENABLED=true`. The SDK provisions an engine through the Docker socket automatically.
 - **Kubernetes** — deploy the Dagger Engine separately with the [Dagger Helm chart](https://docs.dagger.io/reference/deployment/kubernetes/), then point the platform at it via `ARCHESTRA_CODE_RUNTIME_DAGGER_ENGINE_HOST`.
 
 - **`ARCHESTRA_CODE_RUNTIME_ENABLED`** - Enable the code execution runtime and the `run_python` tool.
