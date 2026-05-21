@@ -143,11 +143,12 @@ class CodeRuntimeService {
       if (error instanceof CodeRuntimeBackstopError) {
         releaseWhenSettled = error.pipeline;
       }
+      const runtimeError = await this.normalizeRunError(error);
       metrics.codeRuntime.reportRun(
         "runtime_error",
         (Date.now() - startedAt) / 1000,
       );
-      throw error;
+      throw runtimeError;
     } finally {
       if (acquired) {
         if (releaseWhenSettled) {
@@ -329,6 +330,17 @@ class CodeRuntimeService {
     return parseCapturedRun(await container.file(RESULT_FILE).contents());
   }
 
+  private async normalizeRunError(error: unknown): Promise<CodeRuntimeError> {
+    if (error instanceof CodeRuntimeError) return error;
+
+    this.status = "error";
+    await this.closeDaggerSession();
+    logger.error({ err: error }, "[CodeRuntime] Dagger execution failed");
+    return new CodeRuntimeError(
+      "the code runtime is not available (engine unreachable)",
+    );
+  }
+
   private async closeDaggerSession(): Promise<void> {
     this.baseContainer = null;
     this.client = null;
@@ -344,10 +356,10 @@ class CodeRuntimeService {
    */
   private applyDaggerEnv(): void {
     const { daggerEngineHost, daggerCliBin } = config.codeRuntime;
-    if (daggerEngineHost && !process.env._EXPERIMENTAL_DAGGER_RUNNER_HOST) {
+    if (daggerEngineHost) {
       process.env._EXPERIMENTAL_DAGGER_RUNNER_HOST = daggerEngineHost;
     }
-    if (daggerCliBin && !process.env._EXPERIMENTAL_DAGGER_CLI_BIN) {
+    if (daggerCliBin) {
       process.env._EXPERIMENTAL_DAGGER_CLI_BIN = daggerCliBin;
     }
   }
