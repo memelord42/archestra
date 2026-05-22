@@ -1676,6 +1676,11 @@ const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
           }
         }
 
+        // Validate required userConfig fields against the effective post-
+        // merge state for non-BYOS — a required header already on the
+        // install's bag stays satisfied when the body only carries newly-
+        // added fields. BYOS still validates against the body alone (the
+        // user re-supplies all vault references on each reinstall).
         if (catalogItem.userConfig) {
           const requiredUserConfigFields = Object.entries(
             catalogItem.userConfig,
@@ -1685,8 +1690,18 @@ const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
 
           const missingUserConfigFields = requiredUserConfigFields.filter(
             ([fieldName]) => {
-              const value = userConfigValues?.[fieldName];
-              return !value?.trim();
+              const submitted = userConfigValues?.[fieldName];
+              if (isByosVault) {
+                return !submitted?.trim();
+              }
+              if (submitted === "") {
+                return true;
+              }
+              if (typeof submitted === "string" && submitted.trim()) {
+                return false;
+              }
+              const existing = existingSecrets[fieldName];
+              return typeof existing !== "string" || !existing.trim();
             },
           );
 
@@ -1729,14 +1744,34 @@ const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
             await McpServerModel.update(id, { secretId: secret.id });
           }
         } else {
-          // Non-BYOS mode: merge new values with the existing bag fetched
-          // above for validation.
-          const mergedSecrets = {
+          // Non-BYOS: merge new values with the existing bag (fetched
+          // above for validation), treating empty string in
+          // `userConfigValues` as the delete signal for that key.
+          // Omission preserves the existing entry.
+          const mergedSecrets: Record<string, unknown> = {
             ...existingSecrets,
             ...catalogStaticUserConfigValues,
             ...(environmentValues ?? {}),
-            ...(installUserConfigValues ?? {}),
           };
+          for (const [fieldName, fieldConfig] of Object.entries(
+            catalogItem.userConfig ?? {},
+          )) {
+            // Static catalog-only headers (headerName + promptOnInstallation
+            // === false) can't be overridden by an installer request — the
+            // catalog static spread above wins.
+            if (
+              fieldConfig?.headerName &&
+              fieldConfig?.promptOnInstallation === false
+            ) {
+              continue;
+            }
+            const submitted = userConfigValues?.[fieldName];
+            if (submitted === "") {
+              delete mergedSecrets[fieldName];
+            } else if (typeof submitted === "string") {
+              mergedSecrets[fieldName] = submitted;
+            }
+          }
 
           if (mcpServer.secretId) {
             await secretManager().updateSecret(
