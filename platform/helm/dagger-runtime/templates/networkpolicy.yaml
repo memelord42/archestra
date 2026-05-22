@@ -19,8 +19,12 @@ spec:
     - from:
         {{- range .Values.networkPolicy.ingress.allowedClients }}
         - namespaceSelector:
+            {{- with .namespace }}
             matchLabels:
-              kubernetes.io/metadata.name: {{ .namespace | quote }}
+              kubernetes.io/metadata.name: {{ . | quote }}
+            {{- else }}
+            {}
+            {{- end }}
           podSelector:
             matchLabels:
               {{- toYaml .podLabels | nindent 14 }}

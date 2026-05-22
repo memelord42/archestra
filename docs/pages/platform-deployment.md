@@ -984,6 +984,8 @@ The Dagger `tcp://` transport is plaintext and unauthenticated. Keep it as an in
 
 The companion chart's default egress policy allows DNS to CoreDNS pods labeled `k8s-app=kube-dns` in `kube-system`, then public HTTPS except private, link-local, loopback, carrier-grade NAT, and metadata ranges. Override `networkPolicy.egress.dns` or append `networkPolicy.egress.additionalRules` if your cluster uses different DNS labels, private registries, or an egress proxy.
 
+Set `networkPolicy.egress.additionalDeniedCidrs` to your cluster's Service and Pod CIDRs. The default policy only blocks the RFC1918/link-local ranges, so on clusters whose Service CIDR sits outside those ranges (common on GKE and other managed clusters) sandboxed code could otherwise reach in-cluster services. By default, `networkPolicy.ingress.allowedClients` admits any pod labeled `app.kubernetes.io/part-of=archestra` in any namespace; pin `namespace` on each entry to the archestra-platform release namespace to tighten this.
+
 Deployment by environment:
 
 - **Local dev (Tilt)** — set `ARCHESTRA_CODE_RUNTIME_ENABLED=true`. `tilt up` deploys the companion Dagger runtime chart, port-forwards its internal service, and points the backend at `tcp://127.0.0.1:1234`.
@@ -994,7 +996,7 @@ Deployment by environment:
   - Default: `false`
 
 - **`ARCHESTRA_CODE_RUNTIME_DAGGER_RUNNER_HOST`** - Dagger runner host (sets `_EXPERIMENTAL_DAGGER_RUNNER_HOST`).
-  - Required when `ARCHESTRA_CODE_RUNTIME_ENABLED=true`.
+  - Required when `ARCHESTRA_CODE_RUNTIME_ENABLED=true`; if unset or not a `tcp://` URL, the code runtime stays disabled (the rest of the platform is unaffected).
   - Must use `tcp://`.
   - Example: `tcp://dagger-runtime.dagger.svc.cluster.local:1234`
 
@@ -1014,7 +1016,7 @@ Deployment by environment:
 - **`ARCHESTRA_CODE_RUNTIME_MAX_OUTPUT_BYTES`** - stdout and stderr are each truncated to this many bytes.
   - Default: `65536`
 
-The `run_python` tool also accepts an optional `requirements` array. Each entry is passed to `uv run --with`, so a script can request packages such as `requests` or `pandas==2.3.3` without persisting anything between runs.
+The `run_python` tool also accepts an optional `requirements` array. Each entry is installed into the run's virtual environment with `uv` before the script executes, so a script can request packages such as `requests` or `pandas==2.3.3` without persisting anything between runs.
 
 ### Observability & Metrics
 

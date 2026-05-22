@@ -1154,19 +1154,19 @@ describe("parseCodeRuntimeDaggerRunnerHost", () => {
     ).toBe("kube-pod://dagger-engine?namespace=dagger");
   });
 
-  test("should require host when runtime is enabled", () => {
-    expect(() =>
+  test("should return undefined when runtime is enabled but host is unset", () => {
+    expect(
       parseCodeRuntimeDaggerRunnerHost({ enabled: true, envValue: undefined }),
-    ).toThrow("ARCHESTRA_CODE_RUNTIME_DAGGER_RUNNER_HOST must be set");
+    ).toBeUndefined();
   });
 
-  test("should reject non-TCP runner hosts", () => {
-    expect(() =>
+  test("should return undefined for non-TCP runner hosts", () => {
+    expect(
       parseCodeRuntimeDaggerRunnerHost({
         enabled: true,
         envValue: "kube-pod://dagger-engine?namespace=dagger",
       }),
-    ).toThrow("must use tcp://");
+    ).toBeUndefined();
   });
 
   test("should trim and return TCP runner host", () => {

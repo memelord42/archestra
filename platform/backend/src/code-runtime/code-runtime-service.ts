@@ -1,5 +1,4 @@
 import {
-  CacheSharingMode,
   type Client,
   type ConnectOpts,
   type Container,
@@ -31,6 +30,9 @@ type CapturedRun = {
   timedOut: boolean;
 };
 type ValidatedRunParams = { code: string; requirements: string[] };
+type PreparedContainer =
+  | { kind: "ready"; container: Container }
+  | { kind: "failed"; result: CapturedRun };
 
 class CodeRuntimeBackstopError extends CodeRuntimeError {
   constructor(readonly pipeline: Promise<unknown>) {
@@ -152,16 +154,20 @@ class CodeRuntimeService {
     } finally {
       if (acquired) {
         if (releaseWhenSettled) {
-          void releaseWhenSettled
-            .catch((error) => {
-              logger.error(
-                { err: error },
-                "[CodeRuntime] Dagger pipeline failed after backstop timeout",
-              );
-            })
-            .finally(() => {
+          // the backstop already tore the session down; wait briefly for the
+          // doomed pipeline to settle, then free the slot regardless so a hung
+          // engine cannot leak concurrency permanently.
+          const settled = releaseWhenSettled.catch((error) => {
+            logger.error(
+              { err: error },
+              "[CodeRuntime] Dagger pipeline failed after backstop timeout",
+            );
+          });
+          void raceWithTimeout(settled, BACKSTOP_RELEASE_GRACE_MS).finally(
+            () => {
               this.release();
-            });
+            },
+          );
         } else {
           this.release();
         }
@@ -321,14 +327,49 @@ class CodeRuntimeService {
     params: ValidatedRunParams;
     timeoutSeconds: number;
   }): Promise<CapturedRun> {
+    const prepared = await this.installRequirements(
+      baseContainer,
+      params.requirements,
+    );
+    if (prepared.kind === "failed") {
+      return prepared.result;
+    }
+
     const runnerScript = await loadRunnerScript();
-    const container = baseContainer
+    const container = prepared.container
       .withNewFile(`${WORKDIR}/${RUNNER_FILE}`, runnerScript)
       .withNewFile(`${WORKDIR}/${SCRIPT_FILE}`, params.code)
-      .withExec(buildRunnerArgs(params.requirements, timeoutSeconds), {
+      .withExec(buildRunnerArgs(timeoutSeconds), {
         expect: DaggerReturnType.Any,
       });
     return parseCapturedRun(await container.file(RESULT_FILE).contents());
+  }
+
+  /**
+   * installs requested packages into the pre-built venv as a standalone exec.
+   * keeping it off the script-bearing container means Dagger's layer cache
+   * reuses it across runs, and the install is never charged against the
+   * script's CPU budget. a failed install surfaces as a normal non-zero run.
+   */
+  private async installRequirements(
+    baseContainer: Container,
+    requirements: string[],
+  ): Promise<PreparedContainer> {
+    if (requirements.length === 0) {
+      return { kind: "ready", container: baseContainer };
+    }
+    const installed = baseContainer.withExec(
+      ["uv", "pip", "install", "--python", VENV_PYTHON, ...requirements],
+      { expect: DaggerReturnType.Any },
+    );
+    const exitCode = await installed.exitCode();
+    if (exitCode === 0) {
+      return { kind: "ready", container: installed };
+    }
+    return {
+      kind: "failed",
+      result: capturedInstallFailure(exitCode, await installed.stderr()),
+    };
   }
 
   private async normalizeRunError(error: unknown): Promise<CodeRuntimeError> {
@@ -418,8 +459,6 @@ async function loadRunnerScript(): Promise<string> {
   return runnerScriptPromise;
 }
 
-const UV_CACHE_DIR = `${WORKDIR}/uv-cache`;
-const UV_CACHE_KEY = "archestra-code-runtime-uv-cache-v1";
 const VENV_DIR = `${WORKDIR}/.venv`;
 const VENV_PYTHON = `${VENV_DIR}/bin/python`;
 const NON_ROOT_USER = "1000:1000";
@@ -429,26 +468,22 @@ const DAGGER_CONNECT_OPTS = {
 } satisfies ConnectOpts;
 /** extra time beyond the script's own timeout before the hung-run backstop fires. */
 const BACKSTOP_BUFFER_SECONDS = 60;
+/** how long to wait for a backstopped pipeline to settle before freeing its slot. */
+const BACKSTOP_RELEASE_GRACE_MS = 30_000;
 const INIT_RETRY_COOLDOWN_MS = 10_000;
 
 const DEFAULT_REQUIREMENTS = ["numpy", "pandas", "httpx"] as const;
 
 function buildBaseContainer(client: Client): Container {
-  return (
-    client
-      .container()
-      .from(config.codeRuntime.image)
-      .withWorkdir(WORKDIR)
-      .withUser(NON_ROOT_USER)
-      .withEnvVariable("HOME", WORKDIR)
-      .withEnvVariable("UV_CACHE_DIR", UV_CACHE_DIR)
-      // shared, not locked: uv's cache is concurrency-safe, so serializing
-      // runs on it would defeat the maxConcurrent semaphore.
-      .withMountedCache(UV_CACHE_DIR, client.cacheVolume(UV_CACHE_KEY), {
-        owner: NON_ROOT_USER,
-        sharing: CacheSharingMode.Shared,
-      })
-  );
+  // no shared uv cache volume: agent code runs as this same user and could
+  // tamper with a cross-tenant cache. cross-run reuse comes from Dagger's
+  // layer cache (the warmed base and per-requirement-set install execs).
+  return client
+    .container()
+    .from(config.codeRuntime.image)
+    .withWorkdir(WORKDIR)
+    .withUser(NON_ROOT_USER)
+    .withEnvVariable("HOME", WORKDIR);
 }
 
 function warmBaseContainer(container: Container): Container {
@@ -529,10 +564,7 @@ function normalizeRequirements(requirements: string[] | undefined): string[] {
   });
 }
 
-function buildRunnerArgs(
-  requirements: string[],
-  timeoutSeconds: number,
-): string[] {
+function buildRunnerArgs(timeoutSeconds: number): string[] {
   return [
     "python3",
     `${WORKDIR}/${RUNNER_FILE}`,
@@ -545,8 +577,22 @@ function buildRunnerArgs(
     WORKDIR,
     VENV_PYTHON,
     SCRIPT_FILE,
-    ...requirements.flatMap((requirement) => ["--with", requirement]),
   ];
+}
+
+/** turns a failed `uv pip install` into a normal non-zero run result. */
+function capturedInstallFailure(exitCode: number, stderr: string): CapturedRun {
+  const limit = config.codeRuntime.maxOutputBytes;
+  const overLimit = Buffer.byteLength(stderr, "utf8") > limit;
+  return {
+    stdout: "",
+    stderr: overLimit
+      ? `${stderr.slice(0, limit)}\n...[output truncated]`
+      : stderr,
+    exitCode,
+    truncated: overLimit,
+    timedOut: false,
+  };
 }
 
 function formatBytes(bytes: number): string {

@@ -18,7 +18,10 @@ result_file = sys.argv[6]
 workdir = sys.argv[7]
 venv_python = sys.argv[8]
 script_file = sys.argv[9]
-uv_args = sys.argv[10:]
+
+# grace period to drain stdout/stderr after the process exits; bounds the wait
+# so a grandchild that escaped the process group cannot hold the pipes open.
+output_drain_grace_seconds = 5
 
 
 def write_text(path, value):
@@ -86,7 +89,9 @@ def apply_limits():
 
 
 async def run():
-    command = ["uv", "run", "--python", venv_python, *uv_args, "python3", script_file]
+    # packages are installed into the venv beforehand (outside this process), so
+    # RLIMIT_CPU here applies only to the user script, not to dependency installs.
+    command = [venv_python, script_file]
     process = await asyncio.create_subprocess_exec(
         *command,
         cwd=workdir,
@@ -122,7 +127,15 @@ async def run():
             pass
         return_code = 124
 
-    await asyncio.gather(stdout_task, stderr_task)
+    try:
+        await asyncio.wait_for(
+            asyncio.gather(stdout_task, stderr_task),
+            timeout=output_drain_grace_seconds,
+        )
+    except asyncio.TimeoutError:
+        for task in (stdout_task, stderr_task):
+            task.cancel()
+        await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
 
     if not timed_out:
         return_code = normalize_exit_code(return_code)

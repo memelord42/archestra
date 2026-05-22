@@ -20,12 +20,12 @@ networkPolicy:
   create: true
 
   ingress:
-    # by default, allow only Archestra pods in the default namespace to reach Dagger.
-    # production deployments should set namespace to the Helm release namespace used
-    # by archestra-platform.
+    # allow pods carrying these labels to reach Dagger. With no `namespace`,
+    # an entry matches such pods in ANY namespace, so the chart works out of
+    # the box wherever archestra-platform is installed. Production deployments
+    # should pin `namespace` to the archestra-platform release namespace.
     allowedClients:
-      - namespace: default
-        podLabels:
+      - podLabels:
           app.kubernetes.io/part-of: archestra
 
     # extra ingress rules appended verbatim under spec.ingress.
@@ -38,7 +38,12 @@ networkPolicy:
       podLabels:
         k8s-app: kube-dns
 
-    # extra IPv4 CIDRs to block from the public internet allow rule.
+    # extra IPv4 CIDRs to block from the public-internet egress rule.
+    # IMPORTANT: set this to your cluster's Service and Pod CIDRs. Sandboxed
+    # code can otherwise reach in-cluster services whose ClusterIPs fall
+    # outside the RFC1918 ranges blocked by default (common on GKE and other
+    # managed clusters). Link-local and cloud-metadata ranges are already
+    # blocked.
     additionalDeniedCidrs: []
 
     # include IPv6 public egress with private/link-local ranges blocked.
