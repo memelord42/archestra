@@ -1006,14 +1006,19 @@ function splitMessagesForCompaction(messages: ChatMessage[]): {
     return { compactable: messages, recent: [] };
   }
 
+  const latestRealUserMessage = messages[latestRealUserIndex];
+  if (!latestRealUserMessage) {
+    return { compactable: messages, recent: [] };
+  }
+
   if (latestRealUserIndex === messages.length - 1) {
     // single unresolved real user turn with nothing before it — nothing to compact
     if (messages.length === 1) {
-      return { compactable: [], recent: [messages[latestRealUserIndex]!] };
+      return { compactable: [], recent: [latestRealUserMessage] };
     }
     return {
       compactable: messages.slice(0, latestRealUserIndex),
-      recent: [messages[latestRealUserIndex]!],
+      recent: [latestRealUserMessage],
     };
   }
 

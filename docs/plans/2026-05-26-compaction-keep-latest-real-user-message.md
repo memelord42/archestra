@@ -54,9 +54,9 @@ Files:
 Files:
 - (no source changes expected)
 
-- [ ] From `platform/`, run `pnpm type-check` — must pass.
-- [ ] From `platform/`, run `pnpm lint` — must pass; auto-fix anything trivial.
-- [ ] Run full backend test suite for the chat routes: `pnpm --filter @platform/backend test routes/chat`.
+- [x] From `platform/`, run `pnpm type-check` — must pass.
+- [x] From `platform/`, run `pnpm lint` — must pass; auto-fix anything trivial.
+- [x] Run full backend test suite for the chat routes: `pnpm --filter @platform/backend test routes/chat`.
 
 ### Task 3: Verify acceptance criteria
 
