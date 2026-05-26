@@ -27,19 +27,19 @@ Replace the current "keep last 4 user turns verbatim" behavior in context compac
 Files:
 - Modify: `platform/backend/src/routes/chat/context-compaction.ts`
 
-- [x] Add `isRealUserMessage(message: ChatMessage): boolean` that returns true only when `message.role === "user"` and at least one part is user-authored content (`part.type === "text"` with non-empty text, or `part.type === "file"`). Parts whose `type` starts with `"tool-"` do not count.
-- [x] Replace `splitMessagesForCompaction()` body with the new rule:
+- [ ] Add `isRealUserMessage(message: ChatMessage): boolean` that returns true only when `message.role === "user"` and at least one part is user-authored content (`part.type === "text"` with non-empty text, or `part.type === "file"`). Parts whose `type` starts with `"tool-"` do not count.
+- [ ] Replace `splitMessagesForCompaction()` body with the new rule:
   - find `latestRealUserIndex = findLatestRealUserMessageIndex(messages)`
   - if `latestRealUserIndex < 0`: `compactable = messages`, `recent = []`
   - if `latestRealUserIndex === messages.length - 1`:
     - if it is the only message (`messages.length === 1`) AND there is nothing before it: `compactable = []`, `recent = [that message]` (current "single unresolved user turn" behavior)
     - otherwise: `compactable = messages.slice(0, latestRealUserIndex)`, `recent = [messages[latestRealUserIndex]]`
   - if `latestRealUserIndex < messages.length - 1`: `compactable = messages`, `recent = []`
-- [x] Delete the now-unused `splitLowUserTurnMessagesForCompaction` and `findLatestUserMessageIndex` helpers; replace with `findLatestRealUserMessageIndex` that uses `isRealUserMessage`.
-- [x] Decide on `CONTEXT_COMPACTION_RECENT_USER_TURNS`: it is still used by `buildRecentUserMessagesReference()` as a slice cap. Keep the constant but rename its role in a one-line comment ("max number of recent real user messages serialized into the reference block") — do not delete it.
-- [x] Update `buildRecentUserMessagesReference()` to filter with `isRealUserMessage` instead of `message.role === "user"`. Slice last N stays.
-- [x] Verify boundary handling: the compactable list's last element is still passed to `resolveCompactionBoundaryMessageId()` unchanged, so `compactedThroughMessageId` continues to point at the last compacted message.
-- [x] Update / add unit tests in `context-compaction.test.ts`:
+- [ ] Delete the now-unused `splitLowUserTurnMessagesForCompaction` and `findLatestUserMessageIndex` helpers; replace with `findLatestRealUserMessageIndex` that uses `isRealUserMessage`.
+- [ ] Decide on `CONTEXT_COMPACTION_RECENT_USER_TURNS`: it is still used by `buildRecentUserMessagesReference()` as a slice cap. Keep the constant but rename its role in a one-line comment ("max number of recent real user messages serialized into the reference block") — do not delete it.
+- [ ] Update `buildRecentUserMessagesReference()` to filter with `isRealUserMessage` instead of `message.role === "user"`. Slice last N stays.
+- [ ] Verify boundary handling: the compactable list's last element is still passed to `resolveCompactionBoundaryMessageId()` unchanged, so `compactedThroughMessageId` continues to point at the last compacted message.
+- [ ] Update / add unit tests in `context-compaction.test.ts`:
   - Replace `"keeps the last four user turns verbatim"` with `"keeps only the latest unresolved real user message live"` — given a long conversation, expect `compactable` to contain everything up to but not including the final real user message and `recent` to contain exactly that one message.
   - Add `"treats tool-result-only user messages as compactable, not as recent user turns"`: build messages where the second-to-last message has `role: "user"` but only `parts: [{ type: "tool-foo", ... }]`, followed by a real user text message. Expect the tool-result message to land in `compactable` and only the real user message in `recent`.
   - Add `"compacts historical tool-result payloads even when they appear as role: user"`: large synthetic tool-result-only user message followed by an assistant message followed by a final real user message — expect the tool-result and assistant message in `compactable`, only the final real user message in `recent`.
@@ -47,16 +47,16 @@ Files:
   - Adjust `"compacts short older work while keeping the latest user turn live"` and `"keeps the latest unresolved user turn live while compacting prior low-turn work"` only if their expectations change — under the new rule, both should still pass without modification because their final message is already a real user message.
   - Adjust `"compacts completed low-turn conversations without a size gate"`: under the new rule, the final message is an assistant message, so `latestRealUserIndex < messages.length - 1` ⇒ `compactable = messages`, `recent = []`. Existing expectation already matches; verify.
   - Update `"compaction prompt preserves recent user messages outside the bounded transcript"` if needed so that a tool-result-only user message is excluded from the reference block.
-- [x] Run backend tests for this file: `pnpm --filter @platform/backend test context-compaction` (from `platform/`). All tests must pass.
+- [ ] Run backend tests for this file: `pnpm --filter @platform/backend test context-compaction` (from `platform/`). All tests must pass.
 
 ### Task 2: Verify the type-checker and linter are clean
 
 Files:
 - (no source changes expected)
 
-- [x] From `platform/`, run `pnpm type-check` — must pass.
-- [x] From `platform/`, run `pnpm lint` — must pass; auto-fix anything trivial.
-- [x] Run full backend test suite for the chat routes: `pnpm --filter @platform/backend test routes/chat`.
+- [ ] From `platform/`, run `pnpm type-check` — must pass.
+- [ ] From `platform/`, run `pnpm lint` — must pass; auto-fix anything trivial.
+- [ ] Run full backend test suite for the chat routes: `pnpm --filter @platform/backend test routes/chat`.
 
 ### Task 3: Verify acceptance criteria
 
