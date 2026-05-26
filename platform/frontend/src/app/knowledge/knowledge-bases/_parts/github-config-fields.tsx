@@ -10,6 +10,13 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 
 interface GithubConfigFieldsProps {
@@ -26,6 +33,9 @@ export function GithubConfigFields({
   hideUrl = false,
   hideOwner = false,
 }: GithubConfigFieldsProps) {
+  const authMethod = form.watch(`${prefix}.authMethod`) as string | undefined;
+  const usesGithubApp = authMethod === "github_app";
+
   return (
     <div className="space-y-4">
       {!hideUrl && (
@@ -47,6 +57,68 @@ export function GithubConfigFields({
             </FormItem>
           )}
         />
+      )}
+
+      <FormField
+        control={form.control}
+        name={`${prefix}.authMethod`}
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Authentication Method</FormLabel>
+            <Select
+              onValueChange={field.onChange}
+              value={(field.value as string | undefined) ?? "pat"}
+            >
+              <FormControl>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                <SelectItem value="pat">Personal Access Token</SelectItem>
+                <SelectItem value="github_app">GitHub App</SelectItem>
+              </SelectContent>
+            </Select>
+            <FormDescription>
+              Use GitHub App authentication for organization-managed installs.
+            </FormDescription>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      {usesGithubApp && (
+        <>
+          <FormField
+            control={form.control}
+            name={`${prefix}.githubAppId`}
+            rules={{ required: "GitHub App ID is required" }}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>GitHub App ID</FormLabel>
+                <FormControl>
+                  <Input placeholder="123456" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name={`${prefix}.githubAppInstallationId`}
+            rules={{ required: "Installation ID is required" }}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Installation ID</FormLabel>
+                <FormControl>
+                  <Input placeholder="98765432" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </>
       )}
 
       {!hideOwner && (
@@ -133,9 +205,9 @@ export function GithubConfigFields({
         render={({ field }) => (
           <FormItem className="flex items-center justify-between rounded-lg border p-3">
             <div className="space-y-0.5">
-              <FormLabel>Include Markdown Files</FormLabel>
+              <FormLabel>Include Repository Files</FormLabel>
               <FormDescription>
-                Sync .md and .mdx files from repositories.
+                Sync selected text files from repositories.
               </FormDescription>
             </div>
             <FormControl>
@@ -144,6 +216,24 @@ export function GithubConfigFields({
                 onCheckedChange={field.onChange}
               />
             </FormControl>
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name={`${prefix}.fileTypes`}
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>File Types (optional)</FormLabel>
+            <FormControl>
+              <Input placeholder=".md, .mdx, .yaml, .yml" {...field} />
+            </FormControl>
+            <FormDescription>
+              Comma-separated extensions to index when repository files are
+              enabled. Defaults to Markdown and YAML.
+            </FormDescription>
+            <FormMessage />
           </FormItem>
         )}
       />

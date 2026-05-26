@@ -48,6 +48,7 @@ export type ConnectorCredentialConfig = {
   apiTokenPlaceholder?: string;
   apiTokenRequiredMessage?: string;
   apiTokenHelpText?: ReactNode;
+  apiTokenMultiline?: boolean;
 };
 
 type ConnectorOption = {
@@ -295,7 +296,7 @@ export function getDefaultConnectorConfig(
   const defaultConfigs: Record<ConnectorType, Record<string, unknown>> = {
     jira: { type, isCloud: true },
     confluence: { type, isCloud: true },
-    github: { type, githubUrl: "https://api.github.com" },
+    github: { type, githubUrl: "https://api.github.com", authMethod: "pat" },
     gitlab: { type, gitlabUrl: "https://gitlab.com" },
     linear: {
       type,
@@ -327,6 +328,7 @@ export function getConnectorCredentialConfig(params: {
   type: ConnectorType;
   emailRequired: boolean;
   mode: "create" | "edit";
+  authMethod?: string;
 }): ConnectorCredentialConfig {
   const jiraConfluenceApiTokenLabel = params.emailRequired
     ? "API Token"
@@ -338,6 +340,8 @@ export function getConnectorCredentialConfig(params: {
     ? "API token is required"
     : "API token or personal access token is required";
 
+  const githubUsesApp =
+    params.type === "github" && params.authMethod === "github_app";
   const apiTokenLabels: Record<ConnectorType, string | undefined> = {
     servicenow: "Password",
     notion: "Integration Token",
@@ -347,7 +351,7 @@ export function getConnectorCredentialConfig(params: {
     outline: "API Key",
     jira: jiraConfluenceApiTokenLabel,
     confluence: jiraConfluenceApiTokenLabel,
-    github: "Personal Access Token",
+    github: githubUsesApp ? "Private Key" : "Personal Access Token",
     gitlab: "Personal Access Token",
     linear: "Personal Access Token",
     asana: "Personal Access Token",
@@ -366,7 +370,9 @@ export function getConnectorCredentialConfig(params: {
       outline: "Your Outline API key (starts with ol_api_)",
       jira: jiraConfluenceApiTokenPlaceholder,
       confluence: jiraConfluenceApiTokenPlaceholder,
-      github: "Your personal access token",
+      github: githubUsesApp
+        ? "Paste the GitHub App private key PEM"
+        : "Your personal access token",
       gitlab: "Your personal access token",
       linear: "Your personal access token",
       asana: "Your personal access token",
@@ -385,7 +391,9 @@ export function getConnectorCredentialConfig(params: {
     outline: "Leave empty to keep existing token",
     jira: "Leave empty to keep existing token",
     confluence: "Leave empty to keep existing token",
-    github: "Leave empty to keep existing token",
+    github: githubUsesApp
+      ? "Leave empty to keep existing private key"
+      : "Leave empty to keep existing token",
     gitlab: "Leave empty to keep existing token",
     linear: "Leave empty to keep existing token",
     asana: "Leave empty to keep existing token",
@@ -402,7 +410,9 @@ export function getConnectorCredentialConfig(params: {
     outline: "API key is required",
     jira: jiraConfluenceApiTokenRequiredMessage,
     confluence: jiraConfluenceApiTokenRequiredMessage,
-    github: "Personal access token is required",
+    github: githubUsesApp
+      ? "GitHub App private key is required"
+      : "Personal access token is required",
     gitlab: "Personal access token is required",
     linear: "Personal access token is required",
     asana: "Personal access token is required",
@@ -424,6 +434,7 @@ export function getConnectorCredentialConfig(params: {
         : editApiTokenPlaceholders[params.type],
     apiTokenRequiredMessage: apiTokenRequiredMessages[params.type],
     apiTokenHelpText,
+    apiTokenMultiline: githubUsesApp,
   };
 }
 

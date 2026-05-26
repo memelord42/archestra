@@ -151,6 +151,7 @@ export class JiraConnector extends BaseConnector {
         baseUrl: parsed.jiraBaseUrl,
         isCloud: parsed.isCloud,
         projectKey: parsed.projectKey,
+        projectKeys: parsed.projectKeys,
         jql,
         checkpoint,
       },
@@ -484,8 +485,13 @@ function buildJql(
 ): string {
   const clauses: string[] = [];
 
-  if (config.projectKey) {
-    clauses.push(`project = "${config.projectKey}"`);
+  const projectKeys = getProjectKeys(config);
+  if (projectKeys.length === 1) {
+    clauses.push(`project = "${projectKeys[0]}"`);
+  } else if (projectKeys.length > 1) {
+    clauses.push(
+      `project IN (${projectKeys.map((key) => `"${key}"`).join(", ")})`,
+    );
   }
 
   if (config.jqlQuery) {
@@ -518,6 +524,12 @@ function buildJql(
     return `${jql} ORDER BY updated ASC`;
   }
   return jql;
+}
+
+function getProjectKeys(config: JiraConfig): string[] {
+  const keys =
+    config.projectKeys ?? (config.projectKey ? [config.projectKey] : []);
+  return [...new Set(keys.map((key) => key.trim()).filter(Boolean))];
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: SDK issue types vary between v2/v3

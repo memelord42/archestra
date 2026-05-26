@@ -1,4 +1,5 @@
 import { Octokit } from "@octokit/rest";
+import { importPKCS8, SignJWT } from "jose";
 import type pino from "pino";
 import type {
   ConnectorCredentials,
@@ -29,10 +30,7 @@ export class GithubConnector extends BaseConnector {
       label: "GitHub",
       invalidConfigError:
         "Invalid GitHub configuration: githubUrl (string) and owner (string) are required",
-      extraChecks: (parsed) =>
-        /^https?:\/\/.+/.test(parsed.githubUrl)
-          ? null
-          : "githubUrl must be a valid HTTP(S) URL",
+      extraChecks: (parsed) => validateGithubConfig(parsed),
     });
   }
 
@@ -48,7 +46,17 @@ export class GithubConnector extends BaseConnector {
     return this.runConnectionTest({
       label: "GitHub",
       probe: async () => {
-        const octokit = createOctokit(parsed, params.credentials, this.log);
+        const octokit = await createOctokit(
+          parsed,
+          params.credentials,
+          this.log,
+        );
+        if (parsed.authMethod === "github_app") {
+          await octokit.rest.apps.listReposAccessibleToInstallation({
+            per_page: 1,
+          });
+          return;
+        }
         await octokit.rest.users.getAuthenticated();
       },
     });
@@ -62,8 +70,8 @@ export class GithubConnector extends BaseConnector {
     const parsed = parseGithubConfig(params.config);
     if (!parsed) return null;
 
-    // Markdown file count cannot be estimated without fetching the full repo tree,
-    // so skip estimation entirely when markdown syncing is enabled.
+    // Repository file count cannot be estimated without fetching the full repo
+    // tree, so skip estimation entirely when file syncing is enabled.
     if (parsed.includeMarkdownFiles) return null;
 
     this.log.debug(
@@ -72,7 +80,7 @@ export class GithubConnector extends BaseConnector {
     );
 
     try {
-      const octokit = createOctokit(parsed, params.credentials, this.log);
+      const octokit = await createOctokit(parsed, params.credentials, this.log);
       const repos = await getRepos(octokit, parsed);
       let total = 0;
 
@@ -121,7 +129,7 @@ export class GithubConnector extends BaseConnector {
     const checkpoint = (params.checkpoint as GithubCheckpoint | null) ?? {
       type: "github" as const,
     };
-    const octokit = createOctokit(parsed, params.credentials, this.log);
+    const octokit = await createOctokit(parsed, params.credentials, this.log);
     const repos = await getRepos(octokit, parsed);
 
     this.log.debug(
@@ -165,8 +173,9 @@ export class GithubConnector extends BaseConnector {
       }
 
       if (hasMarkdown) {
-        yield* this.syncRepoMarkdownFiles({
+        yield* this.syncRepoFiles({
           octokit,
+          config: parsed,
           repo,
           checkpoint,
           isLastGroup: isLastRepo,
@@ -287,16 +296,21 @@ export class GithubConnector extends BaseConnector {
       };
     }
   }
-  private async *syncRepoMarkdownFiles(params: {
+  private async *syncRepoFiles(params: {
     octokit: Octokit;
+    config: GithubConfig;
     repo: GithubRepo;
     checkpoint: GithubCheckpoint;
     isLastGroup: boolean;
   }): AsyncGenerator<ConnectorSyncBatch> {
-    const { octokit, repo, checkpoint, isLastGroup } = params;
+    const { octokit, config, repo, checkpoint, isLastGroup } = params;
     const repoFullName = `${repo.owner}/${repo.name}`;
+    const indexedExtensions = getIndexedFileExtensions(config);
 
-    this.log.info({ repo: repoFullName }, "Starting markdown file sync");
+    this.log.info(
+      { repo: repoFullName, indexedExtensions },
+      "Starting repository file sync",
+    );
 
     let treeSha: string;
     let branch: string;
@@ -352,7 +366,7 @@ export class GithubConnector extends BaseConnector {
           (item) =>
             item.type === "blob" &&
             item.path &&
-            isMarkdownFile(item.path) &&
+            isIndexedRepositoryFile(item.path, indexedExtensions) &&
             item.sha,
         )
         .map((item) => ({
@@ -365,9 +379,9 @@ export class GithubConnector extends BaseConnector {
           repo: repoFullName,
           branch,
           totalTreeItems: allItems.length,
-          markdownFileCount: treeItems.length,
+          fileCount: treeItems.length,
         },
-        "Found markdown files in repository",
+        "Found repository files to index",
       );
     } catch (err) {
       this.log.error(
@@ -377,7 +391,7 @@ export class GithubConnector extends BaseConnector {
           treeSha,
           error: extractErrorMessage(err),
         },
-        "Failed to fetch repository tree, skipping markdown sync",
+        "Failed to fetch repository tree, skipping file sync",
       );
       yield {
         documents: [],
@@ -420,7 +434,7 @@ export class GithubConnector extends BaseConnector {
           totalBatches,
           batchSize: batch.length,
         },
-        "Fetching markdown file contents",
+        "Fetching repository file contents",
       );
 
       for (const file of batch) {
@@ -434,7 +448,7 @@ export class GithubConnector extends BaseConnector {
 
         if (content !== null) {
           documents.push(
-            markdownFileToDocument(file.path, content, repo, branch),
+            repositoryFileToDocument(file.path, content, repo, branch),
           );
         }
       }
@@ -452,7 +466,7 @@ export class GithubConnector extends BaseConnector {
           failureCount: failures.length,
           hasMore: hasMoreFiles || !isLastGroup,
         },
-        "Markdown file batch completed",
+        "Repository file batch completed",
       );
 
       yield {
@@ -471,14 +485,15 @@ export class GithubConnector extends BaseConnector {
 
 // ===== Module-level helpers =====
 
-function createOctokit(
+async function createOctokit(
   config: GithubConfig,
   credentials: ConnectorCredentials,
   log: pino.Logger,
-): Octokit {
+): Promise<Octokit> {
   const nativeFetch = globalThis.fetch;
+  const auth = await resolveGithubAuthToken(config, credentials, nativeFetch);
   return new Octokit({
-    auth: credentials.apiToken,
+    auth,
     baseUrl: config.githubUrl.replace(/\/+$/, ""),
     log: {
       debug: (message: string) =>
@@ -499,11 +514,81 @@ function createOctokit(
   });
 }
 
+async function resolveGithubAuthToken(
+  config: GithubConfig,
+  credentials: ConnectorCredentials,
+  fetchImpl: typeof fetch,
+): Promise<string> {
+  if (config.authMethod !== "github_app") {
+    return credentials.apiToken;
+  }
+
+  const appId = config.githubAppId;
+  const installationId = config.githubAppInstallationId;
+  const privateKey = credentials.apiToken;
+  if (!appId || !installationId || !privateKey) {
+    throw new Error(
+      "GitHub App authentication requires app ID, installation ID, and private key",
+    );
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const key = await importPKCS8(normalizePrivateKey(privateKey), "RS256");
+  const jwt = await new SignJWT({})
+    .setProtectedHeader({ alg: "RS256" })
+    .setIssuedAt(now - 60)
+    .setExpirationTime(now + 9 * 60)
+    .setIssuer(appId)
+    .sign(key);
+
+  const response = await fetchImpl(
+    `${config.githubUrl.replace(/\/+$/, "")}/app/installations/${installationId}/access_tokens`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${jwt}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to create GitHub App installation token: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const body = (await response.json()) as { token?: string };
+  if (!body.token) {
+    throw new Error(
+      "GitHub App installation token response did not include a token",
+    );
+  }
+  return body.token;
+}
+
 function parseGithubConfig(
   config: Record<string, unknown>,
 ): GithubConfig | null {
   const result = GithubConfigSchema.safeParse({ type: "github", ...config });
   return result.success ? result.data : null;
+}
+
+function validateGithubConfig(config: GithubConfig): string | null {
+  if (!/^https?:\/\/.+/.test(config.githubUrl)) {
+    return "githubUrl must be a valid HTTP(S) URL";
+  }
+
+  if (
+    config.authMethod === "github_app" &&
+    (!config.githubAppId || !config.githubAppInstallationId)
+  ) {
+    return "GitHub App authentication requires githubAppId and githubAppInstallationId";
+  }
+
+  return null;
 }
 
 type GithubRepo = {
@@ -640,9 +725,25 @@ function shouldSkipItem(item: any, labelsToSkip?: string[]): boolean {
   return itemLabels.some((label) => labelsToSkip.includes(label));
 }
 
-function isMarkdownFile(path: string): boolean {
+const DEFAULT_REPOSITORY_FILE_EXTENSIONS = [".md", ".mdx", ".yaml", ".yml"];
+
+function getIndexedFileExtensions(config: GithubConfig): string[] {
+  const extensions =
+    config.fileTypes && config.fileTypes.length > 0
+      ? config.fileTypes
+      : DEFAULT_REPOSITORY_FILE_EXTENSIONS;
+
+  return extensions
+    .map((extension) => extension.trim().toLowerCase())
+    .filter(Boolean)
+    .map((extension) =>
+      extension.startsWith(".") ? extension : `.${extension}`,
+    );
+}
+
+function isIndexedRepositoryFile(path: string, extensions: string[]): boolean {
   const lower = path.toLowerCase();
-  return lower.endsWith(".md") || lower.endsWith(".mdx");
+  return extensions.some((extension) => lower.endsWith(extension));
 }
 
 async function getFileContent(
@@ -664,7 +765,11 @@ async function getFileContent(
   return Buffer.from(data.content, "base64").toString("utf-8");
 }
 
-function markdownFileToDocument(
+function normalizePrivateKey(privateKey: string): string {
+  return privateKey.replace(/\\n/g, "\n");
+}
+
+function repositoryFileToDocument(
   filePath: string,
   content: string,
   repo: { owner: string; name: string; htmlUrl: string },
@@ -679,7 +784,7 @@ function markdownFileToDocument(
     metadata: {
       repo: `${repo.owner}/${repo.name}`,
       filePath,
-      kind: "markdown_file",
+      kind: "repository_file",
     },
   };
 }

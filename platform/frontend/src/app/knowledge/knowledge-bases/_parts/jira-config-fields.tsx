@@ -75,14 +75,16 @@ export function JiraConfigFields({
 
       <FormField
         control={form.control}
-        name={`${prefix}.projectKey`}
+        name={`${prefix}.projectKeys`}
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Project Key (optional)</FormLabel>
+            <FormLabel>Project Keys (optional)</FormLabel>
             <FormControl>
-              <Input placeholder="PROJ" {...field} />
+              <Input placeholder="ENG, OPS" {...field} />
             </FormControl>
-            <FormDescription>Filter issues by project key.</FormDescription>
+            <FormDescription>
+              Comma-separated project keys to include.
+            </FormDescription>
             <FormMessage />
           </FormItem>
         )}
