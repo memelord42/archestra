@@ -23,6 +23,7 @@ export const actions = [
 
 export const resources = [
   "agent",
+  "skill",
   "mcpGateway",
   "llmProxy",
   "toolPolicy",
@@ -72,10 +73,12 @@ export const resources = [
   "chatAgentPicker",
   "chatProviderSettings",
   "chatExpandToolCalls",
+  "siteNotification",
 ] as const;
 
 export const resourceLabels: Record<Resource, string> = {
   agent: "Agents",
+  skill: "Skills",
   mcpGateway: "MCP Gateways",
   llmProxy: "LLM Proxies",
   toolPolicy: "Tools & Policies",
@@ -111,10 +114,12 @@ export const resourceLabels: Record<Resource, string> = {
   chatAgentPicker: "Chat Agent Picker",
   chatProviderSettings: "Chat Provider Settings",
   chatExpandToolCalls: "Chat Expand Tool Calls",
+  siteNotification: "Site Notifications",
 };
 
 export const resourceDescriptions: Record<Resource, string> = {
   agent: "Agents with prompts and tool assignments",
+  skill: "Agent skills — reusable SKILL.md instruction bundles",
   mcpGateway: "Unified MCP endpoints that aggregate tools for clients",
   llmProxy: "LLM proxy endpoints with security policies and observability",
   toolPolicy: "Tools, tool invocation policies, and trusted data policies",
@@ -156,6 +161,7 @@ export const resourceDescriptions: Record<Resource, string> = {
   chatExpandToolCalls:
     "Controls ability to expand and view tool call details in chat",
   organization: "Organization (internal, used by authentication system)",
+  siteNotification: "Site-wide notification banners and announcements",
 };
 
 /**
@@ -169,7 +175,7 @@ export const internalResources: Resource[] = ["organization"];
  * Used in both the create/edit role dialog and the account permissions display.
  */
 export const resourceCategories: Record<string, Resource[]> = {
-  Agents: ["agent", "agentTrigger", "scheduledTask", "agentSettings"],
+  Agents: ["agent", "skill", "agentTrigger", "scheduledTask", "agentSettings"],
   MCP: [
     "mcpGateway",
     "toolPolicy",
@@ -206,6 +212,7 @@ export const resourceCategories: Record<string, Resource[]> = {
     "secret",
     "apiKey",
     "organizationSettings",
+    "siteNotification",
   ],
 };
 

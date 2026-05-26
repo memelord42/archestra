@@ -12,12 +12,17 @@ export { default as agentTeamsTable } from "./agent-team";
 export { default as agentToolsTable } from "./agent-tool";
 export { default as apikeysTable } from "./api-key";
 export { default as browserTabStatesTable } from "./browser-tab-state";
+export {
+  chatActiveRunEventsTable,
+  chatActiveRunsTable,
+} from "./chat-active-run";
 export { default as chatopsChannelBindingsTable } from "./chatops-channel-binding";
 export { default as chatopsProcessedMessagesTable } from "./chatops-processed-message";
 export { default as chatopsThreadAgentOverrideTable } from "./chatops-thread-agent-override";
 export { default as connectorRunsTable } from "./connector-run";
 export { default as conversationsTable } from "./conversation";
 export { default as conversationChatErrorsTable } from "./conversation-chat-error";
+export { default as conversationCompactionsTable } from "./conversation-compaction";
 export { default as conversationEnabledToolsTable } from "./conversation-enabled-tool";
 export {
   conversationShareTeamsTable,
@@ -47,6 +52,7 @@ export { default as llmProviderApiKeyModelsTable } from "./llm-provider-api-key-
 export { default as mcpCatalogLabelsTable } from "./mcp-catalog-label";
 export { default as mcpCatalogTeamsTable } from "./mcp-catalog-team";
 export { default as mcpHttpSessionsTable } from "./mcp-http-session";
+export { default as mcpPresetEntriesTable } from "./mcp-preset-entry";
 export { default as mcpServersTable } from "./mcp-server";
 export { default as mcpServerInstallationRequestsTable } from "./mcp-server-installation-request";
 export { default as mcpServerUsersTable } from "./mcp-server-user";
@@ -66,6 +72,10 @@ export { default as scheduleTriggersTable } from "./schedule-trigger";
 export { default as scheduleTriggerRunsTable } from "./schedule-trigger-run";
 export { default as secretsTable } from "./secret";
 export { default as sessionsTable } from "./session";
+export { default as siteNotificationsTable } from "./site-notification";
+export { default as skillsTable } from "./skill";
+export { default as skillFilesTable } from "./skill-file";
+export { default as skillTeamsTable } from "./skill-team";
 export { default as tasksTable } from "./task";
 export { team as teamsTable, teamMember as teamMembersTable } from "./team";
 export { default as teamExternalGroupsTable } from "./team-external-group";
