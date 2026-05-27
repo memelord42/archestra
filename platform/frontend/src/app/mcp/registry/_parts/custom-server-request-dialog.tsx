@@ -119,10 +119,17 @@ export function CustomServerRequestDialog({
             serverType: "local" as const,
             localConfig: {
               command: values.command,
-              arguments: values.arguments
-                .split("\n")
-                .map((arg) => arg.trim())
-                .filter((arg) => arg.length > 0),
+              arguments: (() => {
+                const raw = values.arguments;
+                if (!raw || !raw.trim()) return [];
+                if (raw.trim().startsWith("[")) {
+                  try {
+                    const parsed = JSON.parse(raw);
+                    if (Array.isArray(parsed)) return parsed.map(String);
+                  } catch { /* fall through */ }
+                }
+                return raw.split("\n").map((arg) => arg.trim()).filter((arg) => arg.length > 0);
+              })(),
               environment:
                 values.environment.length > 0 ? values.environment : undefined,
             },

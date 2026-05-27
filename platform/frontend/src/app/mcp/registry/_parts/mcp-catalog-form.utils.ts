@@ -34,13 +34,20 @@ export function transformFormToApiData(
 
   // Handle local configuration
   if (values.serverType === "local" && values.localConfig) {
-    // Parse arguments string into array
-    const argumentsArray = values.localConfig.arguments
-      ? values.localConfig.arguments
-          .split("\n")
-          .map((arg) => arg.trim())
-          .filter((arg) => arg.length > 0)
-      : [];
+    // Parse arguments string into array — supports both one-per-line and JSON array formats
+    const argumentsArray = (() => {
+      const raw = values.localConfig.arguments;
+      if (!raw || !raw.trim()) return [];
+      // JSON array format: ["--verbose", "--port=8080"]
+      if (raw.trim().startsWith("[")) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed.map(String);
+        } catch { /* fall through to line-by-line parsing */ }
+      }
+      // One-per-line format
+      return raw.split("\n").map((arg) => arg.trim()).filter((arg) => arg.length > 0);
+    })();
 
     data.localConfig = {
       command: values.localConfig.command || undefined,
